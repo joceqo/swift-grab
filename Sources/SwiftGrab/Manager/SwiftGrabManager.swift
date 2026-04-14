@@ -151,6 +151,8 @@ public final class SwiftGrabManager: ObservableObject {
     }
 
     private func updateHover(for screenPoint: CGPoint) {
+        // Don't update hover while the post-capture panel is showing.
+        guard lastCaptureFrame == nil else { return }
         switch selectionTool {
         case .element:
             let inspection = AppLocalInspector.inspect(at: screenPoint)
@@ -217,6 +219,7 @@ public final class SwiftGrabManager: ObservableObject {
             )
             lastPayload = payload
             lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(frame)
+            hoverInfo = nil
             statusText = "Captured element. Copy payload or pick again."
             captureHandler?(payload)
         }
@@ -251,6 +254,7 @@ public final class SwiftGrabManager: ObservableObject {
             )
             lastPayload = payload
             lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(regionRect)
+            hoverInfo = nil
             statusText = "Captured region. Copy payload or pick again."
             captureHandler?(payload)
         }

@@ -3,75 +3,91 @@ import SwiftUI
 struct GrabOverlayView: View {
     @ObservedObject var manager: SwiftGrabManager
 
+    private var isSelecting: Bool {
+        manager.lastCaptureFrame == nil
+    }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // Hover highlight
-            if let hoverRect = manager.hoverFrame {
-                Rectangle()
-                    .stroke(Color.blue, lineWidth: 2)
-                    .background(Color.blue.opacity(0.12))
-                    .frame(width: hoverRect.width, height: hoverRect.height)
-                    .position(x: hoverRect.midX, y: hoverRect.midY)
-
-                // Element info tooltip (element mode only)
-                if !manager.isRegionToolSelected, let info = manager.hoverInfo {
-                    Text(info)
-                        .font(.caption.monospaced())
-                        .lineLimit(1)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                        )
-                        .position(x: hoverRect.midX, y: hoverRect.maxY + 14)
-                }
-
-                // Region size label
-                if manager.isRegionToolSelected, let regionSizeText = manager.regionSizeText {
-                    Text(regionSizeText)
-                        .font(.caption.monospacedDigit())
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.regularMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .position(x: hoverRect.midX, y: hoverRect.minY - 14)
-                }
+            // Layer 1: Full-screen gesture target — only during selection.
+            // Removed when post-capture so TextField/buttons receive events.
+            if isSelecting {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { location in
+                        manager.handleClick(atSwiftUIPoint: location)
+                    }
+                    .gesture(
+                        DragGesture(minimumDistance: 4)
+                            .onChanged { value in
+                                manager.handleRegionDragChanged(atSwiftUIPoint: value.location)
+                            }
+                            .onEnded { value in
+                                manager.handleRegionDragEnded(atSwiftUIPoint: value.location)
+                            }
+                    )
             }
 
-            // Post-capture panel
-            if let capturedFrame = manager.lastCaptureFrame {
-                VStack(alignment: .leading, spacing: 8) {
-                    if let desc = manager.lastElementDescription {
-                        Text(desc)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    TextField("Add a note for AI...", text: $manager.userNote)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 280)
-                    HStack(spacing: 8) {
-                        Button("Copy & Close") { manager.copyLastPayloadAndClose() }
-                            .keyboardShortcut(.return, modifiers: [])
-                        Button("Retake") { manager.retakeSelection() }
-                    }
-                }
-                .padding(10)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
-                )
-                .position(x: capturedFrame.midX, y: capturedFrame.maxY + 50)
+            // Layer 2: Decorations — hover highlight, tooltip, region size.
+            // Non-interactive so clicks pass through to the gesture layer or controls.
+            decorationsLayer
+                .allowsHitTesting(false)
+
+            // Layer 3: Interactive controls — toolbar or post-capture panel.
+            controlsLayer
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Decorations (non-interactive)
+
+    @ViewBuilder
+    private var decorationsLayer: some View {
+        if let hoverRect = manager.hoverFrame {
+            // Blue highlight rectangle
+            Rectangle()
+                .stroke(Color.accentColor, lineWidth: 2)
+                .background(Color.accentColor.opacity(0.10))
+                .frame(width: hoverRect.width, height: hoverRect.height)
+                .position(x: hoverRect.midX, y: hoverRect.midY)
+
+            // Element tooltip (element mode only)
+            if !manager.isRegionToolSelected, let info = manager.hoverInfo {
+                Text(info)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                    .position(x: hoverRect.midX, y: hoverRect.maxY + 16)
             }
 
-            // Toolbar (hidden after capture)
-            if manager.lastCaptureFrame == nil {
+            // Region size label (region mode only)
+            if manager.isRegionToolSelected, let sizeText = manager.regionSizeText {
+                Text(sizeText)
+                    .font(.caption.monospacedDigit())
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .position(x: hoverRect.midX, y: hoverRect.minY - 14)
+            }
+        }
+    }
+
+    // MARK: - Interactive controls
+
+    @ViewBuilder
+    private var controlsLayer: some View {
+        if let capturedFrame = manager.lastCaptureFrame {
+            postCapturePanel(at: capturedFrame)
+        } else {
+            VStack {
                 GrabToolbarView(
+                    isRegionMode: manager.isRegionToolSelected,
                     permissionMessage: manager.permissionMessage,
                     statusText: manager.statusText,
                     onSelectElement: { manager.setSelectionTool(.element) },
@@ -79,22 +95,55 @@ struct GrabOverlayView: View {
                     onCancel: { manager.stop() },
                     onRequestPermission: { manager.requestScreenRecordingPermission() }
                 )
-                .padding(16)
+                .padding(.top, 16)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: - Post-capture panel
+
+    private func postCapturePanel(at capturedFrame: CGRect) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            // Element description header
+            if let desc = manager.lastElementDescription {
+                HStack(spacing: 6) {
+                    Image(systemName: "scope")
+                        .foregroundStyle(.blue)
+                        .font(.caption)
+                    Text(desc)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            // Note input
+            TextField("Add a note for AI...", text: $manager.userNote)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 300)
+
+            // Actions
+            HStack(spacing: 8) {
+                Button(action: { manager.copyLastPayloadAndClose() }) {
+                    Label("Copy & Close", systemImage: "doc.on.clipboard")
+                }
+                .keyboardShortcut(.return, modifiers: [])
+                .buttonStyle(.borderedProminent)
+
+                Button("Retake", action: { manager.retakeSelection() })
+                    .buttonStyle(.bordered)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .onTapGesture { location in
-            manager.handleClick(atSwiftUIPoint: location)
-        }
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    manager.handleRegionDragChanged(atSwiftUIPoint: value.location)
-                }
-                .onEnded { value in
-                    manager.handleRegionDragEnded(atSwiftUIPoint: value.location)
-                }
+        .padding(12)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
         )
+        .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+        .position(x: capturedFrame.midX, y: capturedFrame.maxY + 60)
     }
 }

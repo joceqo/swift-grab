@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct GrabToolbarView: View {
+    var isRegionMode: Bool
     var permissionMessage: String?
     var statusText: String
     var onSelectElement: () -> Void
@@ -9,34 +10,104 @@ struct GrabToolbarView: View {
     var onRequestPermission: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Button("Pick Element", action: onSelectElement)
-                Button("Pick Region", action: onSelectRegion)
-                Button("Cancel", role: .cancel, action: onCancel)
+        VStack(spacing: 8) {
+            HStack(spacing: 12) {
+                modePicker
+                closeButton
             }
+
             Text(statusText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
                 .lineLimit(1)
+
             if let permissionMessage {
-                HStack(spacing: 8) {
-                    Text(permissionMessage)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                    Button("Grant Access", action: onRequestPermission)
-                        .font(.caption)
-                }
-                .frame(maxWidth: 380, alignment: .leading)
+                permissionBanner(permissionMessage)
             }
         }
-        .padding(10)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
         )
-        .shadow(radius: 6)
+        .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+    }
+
+    // MARK: - Mode picker (segmented)
+
+    private var modePicker: some View {
+        HStack(spacing: 2) {
+            modeTab(
+                title: "Element",
+                icon: "scope",
+                isSelected: !isRegionMode,
+                action: onSelectElement
+            )
+            modeTab(
+                title: "Region",
+                icon: "rectangle.dashed",
+                isSelected: isRegionMode,
+                action: onSelectRegion
+            )
+        }
+        .padding(3)
+        .background(Color.primary.opacity(0.06))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private func modeTab(
+        title: String,
+        icon: String,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? .white : .secondary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.accentColor : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Close button
+
+    private var closeButton: some View {
+        Button(action: onCancel) {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22, height: 22)
+                .background(Color.primary.opacity(0.08))
+                .clipShape(Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Permission banner
+
+    private func permissionBanner(_ message: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.system(size: 10))
+            Text(message)
+                .font(.system(size: 10))
+                .foregroundStyle(.orange)
+                .lineLimit(2)
+            Button("Grant", action: onRequestPermission)
+                .font(.system(size: 10, weight: .medium))
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+        }
+        .frame(maxWidth: 320, alignment: .leading)
     }
 }
