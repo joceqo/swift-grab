@@ -2,7 +2,6 @@ import SwiftUI
 import AppKit
 import SwiftGrab
 
-@main
 struct SwiftGrabDemoApp: App {
     @State private var payloadText = "Press Cmd+Option+I to toggle SwiftGrab."
 
@@ -39,3 +38,5 @@ struct SwiftGrabDemoApp: App {
         }
     }
 }
+
+SwiftGrabDemoApp.main()
