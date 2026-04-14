@@ -11,6 +11,7 @@ public final class SwiftGrabManager: ObservableObject {
     }
 
     @Published var hoverFrame: CGRect?
+    @Published var hoverInfo: String?
     @Published var userNote: String = ""
     @Published var permissionMessage: String?
     @Published var regionSizeText: String?
@@ -39,6 +40,7 @@ public final class SwiftGrabManager: ObservableObject {
         uninstallTracking()
         overlayController.dismiss()
         hoverFrame = nil
+        hoverInfo = nil
         regionSizeText = nil
         lastCaptureFrame = nil
         statusText = "Element mode: click a target to capture."
@@ -53,6 +55,7 @@ public final class SwiftGrabManager: ObservableObject {
         selectionTool = tool
         regionDragStart = nil
         regionSizeText = nil
+        hoverInfo = nil
         lastCaptureFrame = nil
         statusText = tool == .element
             ? "Element mode: click a target to capture."
@@ -97,16 +100,15 @@ public final class SwiftGrabManager: ObservableObject {
 
     // MARK: - Clipboard / UI actions
 
-    func copyLastPayloadToClipboard() {
+    var lastElementDescription: String? {
+        lastPayload?.metadata.elementDescription
+    }
+
+    func copyLastPayloadAndClose() {
         guard let payload = lastPayload, let json = try? payload.toJSON(prettyPrinted: true) else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(json, forType: .string)
-        statusText = "Payload copied to clipboard."
-    }
-
-    func sendLastPayloadToAI() {
-        copyLastPayloadToClipboard()
-        statusText = "Payload copied. Paste into your AI prompt."
+        stop()
     }
 
     func retakeSelection() {
@@ -151,8 +153,9 @@ public final class SwiftGrabManager: ObservableObject {
     private func updateHover(for screenPoint: CGPoint) {
         switch selectionTool {
         case .element:
-            let selectedScreenFrame = AppLocalInspector.inspect(at: screenPoint).screenFrame
-            hoverFrame = overlayController.convertScreenRectToSwiftUIRect(selectedScreenFrame)
+            let inspection = AppLocalInspector.inspect(at: screenPoint)
+            hoverFrame = overlayController.convertScreenRectToSwiftUIRect(inspection.screenFrame)
+            hoverInfo = inspection.metadata.elementDescription
         case .region:
             if regionDragStart == nil {
                 if let swiftUIPoint = swiftUIPoint(fromScreenPoint: screenPoint) {
