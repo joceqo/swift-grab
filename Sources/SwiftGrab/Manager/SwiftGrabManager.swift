@@ -113,6 +113,7 @@ public final class SwiftGrabManager: ObservableObject {
 
     func retakeSelection() {
         lastCaptureFrame = nil
+        overlayController.setAcceptsKeyInput(false)
         statusText = selectionTool == .element
             ? "Element mode: click a target to capture."
             : "Region mode: click first corner, then opposite corner."
@@ -220,6 +221,7 @@ public final class SwiftGrabManager: ObservableObject {
             lastPayload = payload
             lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(frame)
             hoverInfo = nil
+            overlayController.setAcceptsKeyInput(true)
             statusText = "Captured element. Copy payload or pick again."
             captureHandler?(payload)
         }
@@ -255,6 +257,7 @@ public final class SwiftGrabManager: ObservableObject {
             lastPayload = payload
             lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(regionRect)
             hoverInfo = nil
+            overlayController.setAcceptsKeyInput(true)
             statusText = "Captured region. Copy payload or pick again."
             captureHandler?(payload)
         }

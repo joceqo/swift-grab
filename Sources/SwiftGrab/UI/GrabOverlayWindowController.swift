@@ -3,13 +3,13 @@ import SwiftUI
 
 @MainActor
 final class GrabOverlayWindowController {
-    private weak var panel: NSPanel?
+    private weak var panel: GrabPanel?
 
     func present(with manager: SwiftGrabManager) {
         guard panel == nil else { return }
         guard let screen = NSScreen.main else { return }
 
-        let panel = NSPanel(
+        let panel = GrabPanel(
             contentRect: screen.frame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -39,6 +39,15 @@ final class GrabOverlayWindowController {
         panel = nil
     }
 
+    /// Enable or disable keyboard input (post-capture TextField needs key window status).
+    func setAcceptsKeyInput(_ accepts: Bool) {
+        guard let panel else { return }
+        panel.acceptsKeyInput = accepts
+        if accepts {
+            panel.makeKey()
+        }
+    }
+
     /// Convert an AppKit window-local point (from NSEvent.locationInWindow) to screen coordinates.
     func convertWindowPointToScreen(_ windowPoint: CGPoint) -> CGPoint? {
         guard let panel else { return nil }
@@ -65,4 +74,14 @@ final class GrabOverlayWindowController {
             overlayScreenFrame: panel.frame
         )
     }
+}
+
+// MARK: - Custom panel with togglable key window support
+
+private class GrabPanel: NSPanel {
+    /// When true, the panel can become key window (needed for TextField input).
+    /// When false, the panel stays non-activating (selection mode).
+    var acceptsKeyInput = false
+
+    override var canBecomeKey: Bool { acceptsKeyInput }
 }
