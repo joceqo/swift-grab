@@ -64,8 +64,7 @@ public final class SwiftGrabManager: ObservableObject {
     }
 
     func handleClick(atOverlayPoint point: CGPoint) {
-        guard let panel = NSApp.windows.first(where: { $0 is NSPanel }) else { return }
-        let screenPoint = panel.convertPoint(toScreen: point)
+        guard let screenPoint = overlayController.convertOverlayPointToScreen(point) else { return }
         switch selectionTool {
         case .element:
             capture(at: screenPoint)
@@ -76,16 +75,15 @@ public final class SwiftGrabManager: ObservableObject {
 
     func handleRegionDragChanged(atOverlayPoint point: CGPoint) {
         guard selectionTool == .region else { return }
-        guard let panel = NSApp.windows.first(where: { $0 is NSPanel }) else { return }
-        let screenPoint = panel.convertPoint(toScreen: point)
+        guard let screenPoint = overlayController.convertOverlayPointToScreen(point) else { return }
         if regionDragStart == nil {
-            hoverFrame = CGRect(x: screenPoint.x - 1, y: screenPoint.y - 1, width: 2, height: 2)
+            hoverFrame = CGRect(x: point.x - 1, y: point.y - 1, width: 2, height: 2)
             regionSizeText = nil
             return
         }
         if let start = regionDragStart {
             let rect = normalizedRect(from: start, to: screenPoint)
-            hoverFrame = rect
+            hoverFrame = overlayController.convertScreenRectToOverlayRect(rect) ?? .zero
             regionSizeText = "\(Int(rect.width)) × \(Int(rect.height))"
         }
     }
@@ -116,7 +114,9 @@ public final class SwiftGrabManager: ObservableObject {
     private func installMouseTracking() {
         trackingMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
             Task { @MainActor in
-                self?.updateHover(for: event.locationInWindow)
+                guard let self else { return }
+                guard let screenPoint = self.overlayController.convertOverlayPointToScreen(event.locationInWindow) else { return }
+                self.updateHover(for: screenPoint)
             }
             return event
         }
@@ -143,10 +143,13 @@ public final class SwiftGrabManager: ObservableObject {
     private func updateHover(for screenPoint: CGPoint) {
         switch selectionTool {
         case .element:
-            hoverFrame = AppLocalInspector.inspect(at: screenPoint).screenFrame
+            let selectedScreenFrame = AppLocalInspector.inspect(at: screenPoint).screenFrame
+            hoverFrame = overlayController.convertScreenRectToOverlayRect(selectedScreenFrame)
         case .region:
             if regionDragStart == nil {
-                hoverFrame = CGRect(x: screenPoint.x - 1, y: screenPoint.y - 1, width: 2, height: 2)
+                if let overlayPoint = screenPointFromOverlay(screenPoint) {
+                    hoverFrame = CGRect(x: overlayPoint.x - 1, y: overlayPoint.y - 1, width: 2, height: 2)
+                }
             }
         }
     }
@@ -200,7 +203,7 @@ public final class SwiftGrabManager: ObservableObject {
                 errors: errors
             )
             lastPayload = payload
-            lastCaptureFrame = frame
+            lastCaptureFrame = overlayController.convertScreenRectToOverlayRect(frame)
             statusText = "Captured element. Copy payload or pick again."
             captureHandler?(payload)
         }
@@ -234,7 +237,7 @@ public final class SwiftGrabManager: ObservableObject {
                 errors: errors
             )
             lastPayload = payload
-            lastCaptureFrame = regionRect
+            lastCaptureFrame = overlayController.convertScreenRectToOverlayRect(regionRect)
             statusText = "Captured region. Copy payload or pick again."
             captureHandler?(payload)
         }
@@ -261,7 +264,9 @@ public final class SwiftGrabManager: ObservableObject {
     private func handleRegionPointClick(at screenPoint: CGPoint) {
         if regionDragStart == nil {
             regionDragStart = screenPoint
-            hoverFrame = CGRect(x: screenPoint.x - 1, y: screenPoint.y - 1, width: 2, height: 2)
+            if let overlayPoint = screenPointFromOverlay(screenPoint) {
+                hoverFrame = CGRect(x: overlayPoint.x - 1, y: overlayPoint.y - 1, width: 2, height: 2)
+            }
             regionSizeText = nil
             statusText = "Now click opposite corner to capture."
             return
@@ -269,12 +274,21 @@ public final class SwiftGrabManager: ObservableObject {
         let start = regionDragStart ?? screenPoint
         let rect = normalizedRect(from: start, to: screenPoint)
         regionDragStart = nil
-        hoverFrame = rect
+        hoverFrame = overlayController.convertScreenRectToOverlayRect(rect)
         regionSizeText = nil
         guard rect.width > 2, rect.height > 2 else {
             statusText = "Region too small. Try again."
             return
         }
         capture(regionRect: rect, cursorPoint: screenPoint)
+    }
+
+    private func screenPointFromOverlay(_ screenPoint: CGPoint) -> CGPoint? {
+        guard let overlayRect = overlayController.convertScreenRectToOverlayRect(
+            CGRect(origin: screenPoint, size: CGSize(width: 1, height: 1))
+        ) else {
+            return nil
+        }
+        return CGPoint(x: overlayRect.origin.x, y: overlayRect.origin.y)
     }
 }

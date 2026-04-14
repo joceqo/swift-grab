@@ -38,4 +38,20 @@ final class GrabOverlayWindowController {
         panel?.orderOut(nil)
         panel = nil
     }
+
+    func convertOverlayPointToScreen(_ overlayPoint: CGPoint) -> CGPoint? {
+        guard let panel else { return nil }
+        return CoordinateMapper.screenPoint(
+            fromOverlayPoint: overlayPoint,
+            overlayScreenFrame: panel.frame
+        )
+    }
+
+    func convertScreenRectToOverlayRect(_ screenRect: CGRect) -> CGRect? {
+        guard let panel else { return nil }
+        return CoordinateMapper.overlayRect(
+            fromScreenRect: screenRect,
+            overlayScreenFrame: panel.frame
+        )
+    }
 }
