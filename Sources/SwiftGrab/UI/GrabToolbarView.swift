@@ -1,35 +1,42 @@
 import SwiftUI
 
 struct GrabToolbarView: View {
-    @Binding var note: String
+    var permissionMessage: String?
+    var statusText: String
     var onSelectElement: () -> Void
     var onSelectRegion: () -> Void
     var onCancel: () -> Void
-    var onCopyPayload: () -> Void
+    var onRequestPermission: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("SwiftGrab")
-                .font(.headline)
-            HStack {
-                Button("Select Element", action: onSelectElement)
-                Button("Select Region", action: onSelectRegion)
-            }
-            HStack {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button("Pick Element", action: onSelectElement)
+                Button("Pick Region", action: onSelectRegion)
                 Button("Cancel", role: .cancel, action: onCancel)
-                Button("Copy Payload", action: onCopyPayload)
             }
-            TextField("What should AI fix?", text: $note)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 280)
+            Text(statusText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            if let permissionMessage {
+                HStack(spacing: 8) {
+                    Text(permissionMessage)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button("Grant Access", action: onRequestPermission)
+                        .font(.caption)
+                }
+                .frame(maxWidth: 380, alignment: .leading)
+            }
         }
-        .padding(12)
+        .padding(10)
         .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
         )
-        .shadow(radius: 10)
+        .shadow(radius: 6)
     }
 }

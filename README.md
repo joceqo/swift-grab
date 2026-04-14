@@ -7,6 +7,7 @@
 - Toggle inspect mode with `Cmd+Option+I`
 - Floating non-activating toolbar (`Select Element`, `Select Region`, `Cancel`, `Copy Payload`)
 - Hover highlight and click-to-capture
+- Drag-to-select region capture
 - AI-ready payload with screenshot + metadata + user note
 - SwiftUI modifier for drop-in integration
 
@@ -83,5 +84,11 @@ SwiftGrab.stop()
 ## App-local V1 Limitations
 
 - Inspects only the host app window hierarchy.
-- Region mode currently uses a fixed-size hover region.
-- Screenshot uses on-screen capture APIs and may fail if screen recording permission is denied.
+- Inspects only one app-local context (no cross-app AX hit testing yet).
+- If Screen Recording is denied, payload is still emitted with metadata and an `errors` entry.
+
+## V2 Notes
+
+- Screenshot capture uses `ScreenCaptureKit`.
+- Toolbar includes `Grant Screen Access` to trigger screen recording permission prompt.
+- Region mode captures drag selection rectangle instead of fixed box.
