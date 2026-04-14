@@ -4,6 +4,7 @@ import ScreenCaptureKit
 
 enum ScreenshotCapturer {
     static func capturePNGBase64(in screenRect: CGRect) async throws -> String {
+        // Clamp in AppKit screen coordinates
         let safeRect = CoordinateMapper.clampToVisibleScreens(screenRect)
         guard !safeRect.isNull, !safeRect.isEmpty else {
             throw GrabCaptureError.emptySelection
@@ -13,32 +14,21 @@ enum ScreenshotCapturer {
             throw GrabCaptureError.screenRecordingPermissionRequired
         }
 
-        let content = try await SCShareableContent.current
-        let displayAndFrame = content.displays
-            .map { display in
-                (
-                    display,
-                    CGRect(
-                        x: display.frame.origin.x,
-                        y: display.frame.origin.y,
-                        width: CGFloat(display.width),
-                        height: CGFloat(display.height)
-                    )
-                )
-            }
-            .max { lhs, rhs in
-                let lhsArea = lhs.1.intersection(safeRect).area
-                let rhsArea = rhs.1.intersection(safeRect).area
-                return lhsArea < rhsArea
-            }
+        // Convert to Quartz coordinates for ScreenCaptureKit
+        let quartzRect = CoordinateMapper.quartzRect(fromAppKitScreenRect: safeRect)
 
-        guard let (display, displayFrame) = displayAndFrame,
-              displayFrame.intersection(safeRect).area > 0
+        let content = try await SCShareableContent.current
+
+        // SCDisplay.frame uses Quartz coordinates — compare in the same space
+        guard let display = content.displays
+            .max(by: { $0.frame.intersection(quartzRect).area < $1.frame.intersection(quartzRect).area }),
+            display.frame.intersection(quartzRect).area > 0
         else {
             throw GrabCaptureError.screenshotFailed
         }
 
-        let localRect = safeRect.offsetBy(dx: -displayFrame.minX, dy: -displayFrame.minY)
+        // Local rect relative to the display's origin (Quartz)
+        let localRect = quartzRect.offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
 
         let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
         let configuration = SCStreamConfiguration()

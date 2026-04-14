@@ -60,15 +60,15 @@ struct GrabOverlayView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { location in
-            manager.handleClick(atOverlayPoint: location)
+            manager.handleClick(atSwiftUIPoint: location)
         }
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
-                    manager.handleRegionDragChanged(atOverlayPoint: value.location)
+                    manager.handleRegionDragChanged(atSwiftUIPoint: value.location)
                 }
                 .onEnded { value in
-                    manager.handleRegionDragEnded(atOverlayPoint: value.location)
+                    manager.handleRegionDragEnded(atSwiftUIPoint: value.location)
                 }
         )
     }

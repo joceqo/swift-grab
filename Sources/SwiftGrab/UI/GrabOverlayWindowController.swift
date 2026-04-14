@@ -39,17 +39,28 @@ final class GrabOverlayWindowController {
         panel = nil
     }
 
-    func convertOverlayPointToScreen(_ overlayPoint: CGPoint) -> CGPoint? {
+    /// Convert an AppKit window-local point (from NSEvent.locationInWindow) to screen coordinates.
+    func convertWindowPointToScreen(_ windowPoint: CGPoint) -> CGPoint? {
         guard let panel else { return nil }
         return CoordinateMapper.screenPoint(
-            fromOverlayPoint: overlayPoint,
+            fromWindowPoint: windowPoint,
             overlayScreenFrame: panel.frame
         )
     }
 
-    func convertScreenRectToOverlayRect(_ screenRect: CGRect) -> CGRect? {
+    /// Convert a SwiftUI gesture point (origin top-left) to AppKit screen coordinates.
+    func convertSwiftUIPointToScreen(_ swiftUIPoint: CGPoint) -> CGPoint? {
         guard let panel else { return nil }
-        return CoordinateMapper.overlayRect(
+        return CoordinateMapper.screenPoint(
+            fromSwiftUIPoint: swiftUIPoint,
+            overlayScreenFrame: panel.frame
+        )
+    }
+
+    /// Convert an AppKit screen rect to SwiftUI overlay coordinates for display.
+    func convertScreenRectToSwiftUIRect(_ screenRect: CGRect) -> CGRect? {
+        guard let panel else { return nil }
+        return CoordinateMapper.swiftUIRect(
             fromScreenRect: screenRect,
             overlayScreenFrame: panel.frame
         )
