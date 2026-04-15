@@ -1,10 +1,16 @@
 import AppKit
 import CoreGraphics
 
+struct HierarchyNode: Sendable {
+    var description: String
+    var screenFrame: CGRect
+}
+
 struct AppLocalInspectionResult {
     var screenFrame: CGRect
     var cursorPoint: CGPoint
     var metadata: GrabPayload.GrabMetadata
+    var hierarchyNodes: [HierarchyNode]
 }
 
 @MainActor
@@ -18,7 +24,8 @@ enum AppLocalInspector {
             return AppLocalInspectionResult(
                 screenFrame: CGRect(origin: screenPoint, size: CGSize(width: 1, height: 1)),
                 cursorPoint: screenPoint,
-                metadata: buildMetadata(window: nil, view: nil, axInfo: nil, hierarchy: nil)
+                metadata: buildMetadata(window: nil, view: nil, axInfo: nil, hierarchy: nil),
+                hierarchyNodes: []
             )
         }
 
@@ -50,15 +57,17 @@ enum AppLocalInspector {
             deepFrame = axFrame
         }
 
-        // 4. Build view hierarchy from deepest element to window root
-        let hierarchy = buildHierarchy(axElement: axInfo?.rawElement, view: deepView, in: window)
+        // 4. Build view hierarchy nodes (with frames) from deepest element to window root
+        let nodes = buildHierarchyNodes(axElement: axInfo?.rawElement, view: deepView, in: window)
+        let hierarchy = nodes.map(\.description)
 
         let metadata = buildMetadata(window: window, view: deepView, axInfo: axInfo, hierarchy: hierarchy)
 
         return AppLocalInspectionResult(
             screenFrame: deepFrame,
             cursorPoint: screenPoint,
-            metadata: metadata
+            metadata: metadata,
+            hierarchyNodes: nodes
         )
     }
 
@@ -125,47 +134,49 @@ enum AppLocalInspector {
         return info
     }
 
-    // MARK: - View hierarchy (stack trace)
+    // MARK: - View hierarchy (stack trace with frames)
 
-    /// Build a hierarchy from the selected element up to the window, like React DevTools.
+    /// Build hierarchy nodes from the selected element up to the window.
     /// First element is the selected (deepest), subsequent are ancestors.
-    private static func buildHierarchy(axElement: Any?, view: NSView?, in window: NSWindow) -> [String] {
-        var hierarchy: [String] = []
+    /// Each node carries its description and screen frame for arrow-key traversal.
+    private static func buildHierarchyNodes(axElement: Any?, view: NSView?, in window: NSWindow) -> [HierarchyNode] {
+        var nodes: [HierarchyNode] = []
 
         // Walk accessibility parent chain first (can see into SwiftUI)
         if let axElement, !(axElement is NSView) {
             var current: Any? = axElement
             while let el = current, !(el is NSView) {
-                hierarchy.append(describeAny(el))
+                var frame = CGRect.zero
+                if let ax = el as? NSAccessibilityElementProtocol {
+                    let f = ax.accessibilityFrame()
+                    if !f.isEmpty { frame = f }
+                }
+                nodes.append(HierarchyNode(description: describeAny(el), screenFrame: frame))
                 if let ax = el as? NSAccessibilityElementProtocol {
                     current = ax.accessibilityParent()
                 } else {
                     break
                 }
             }
-            // Reached an NSView — continue with the view chain
             if let reachedView = current as? NSView {
-                appendViewChain(from: reachedView, in: window, to: &hierarchy)
+                appendViewNodes(from: reachedView, in: window, to: &nodes)
             }
         } else if let view {
-            // No deeper AX element — walk NSView superview chain
-            appendViewChain(from: view, in: window, to: &hierarchy)
+            appendViewNodes(from: view, in: window, to: &nodes)
         }
 
-        return hierarchy
+        return nodes
     }
 
-    private static func appendViewChain(from view: NSView, in window: NSWindow, to hierarchy: inout [String]) {
+    private static func appendViewNodes(from view: NSView, in window: NSWindow, to nodes: inout [HierarchyNode]) {
         var current: NSView? = view
         while let v = current {
-            hierarchy.append(describeView(v))
+            let frame = selectedRectForView(v, in: window) ?? window.frame
+            nodes.append(HierarchyNode(description: describeView(v), screenFrame: frame))
             current = v.superview
         }
-        // Add window at the end
-        let windowDesc = window.title.isEmpty
-            ? "NSWindow"
-            : "NSWindow \"\(window.title)\""
-        hierarchy.append(windowDesc)
+        let windowDesc = window.title.isEmpty ? "NSWindow" : "NSWindow \"\(window.title)\""
+        nodes.append(HierarchyNode(description: windowDesc, screenFrame: window.frame))
     }
 
     private static func describeView(_ view: NSView) -> String {

@@ -26,6 +26,11 @@ public final class SwiftGrabManager: ObservableObject {
     private(set) var currentMode: GrabMode?
     private var regionDragStart: CGPoint?
 
+    // Hierarchy traversal state
+    private var currentHierarchy: [HierarchyNode] = []
+    private var hierarchyIndex: Int = 0
+    private var lastInspection: AppLocalInspectionResult?
+
     public init() {}
 
     public func start(mode: GrabMode = .appLocal) {
@@ -42,6 +47,9 @@ public final class SwiftGrabManager: ObservableObject {
         hoverInfo = nil
         regionSizeText = nil
         lastCaptureFrame = nil
+        currentHierarchy = []
+        hierarchyIndex = 0
+        lastInspection = nil
         statusText = "Element mode: click a target to capture."
         currentMode = nil
     }
@@ -56,6 +64,9 @@ public final class SwiftGrabManager: ObservableObject {
         regionSizeText = nil
         hoverInfo = nil
         lastCaptureFrame = nil
+        currentHierarchy = []
+        hierarchyIndex = 0
+        lastInspection = nil
         statusText = tool == .element
             ? "Element mode: click a target to capture."
             : "Region mode: click first corner, then opposite corner."
@@ -71,7 +82,7 @@ public final class SwiftGrabManager: ObservableObject {
         guard let screenPoint = overlayController.convertSwiftUIPointToScreen(point) else { return }
         switch selectionTool {
         case .element:
-            capture(at: screenPoint)
+            captureAtCurrentLevel(screenPoint: screenPoint)
         case .region:
             handleRegionPointClick(at: screenPoint)
         }
@@ -80,7 +91,6 @@ public final class SwiftGrabManager: ObservableObject {
     func handleRegionDragChanged(atSwiftUIPoint point: CGPoint) {
         guard selectionTool == .region else { return }
         if regionDragStart == nil {
-            // No drag started yet — show crosshair at the raw SwiftUI point
             hoverFrame = CGRect(x: point.x - 1, y: point.y - 1, width: 2, height: 2)
             regionSizeText = nil
             return
@@ -95,6 +105,34 @@ public final class SwiftGrabManager: ObservableObject {
 
     func handleRegionDragEnded(atSwiftUIPoint point: CGPoint) {
         _ = point
+    }
+
+    // MARK: - Hierarchy traversal (arrow keys)
+
+    func navigateUp() {
+        guard selectionTool == .element, !currentHierarchy.isEmpty else { return }
+        guard lastCaptureFrame == nil else { return }
+        if hierarchyIndex < currentHierarchy.count - 1 {
+            hierarchyIndex += 1
+            displayHierarchyLevel()
+        }
+    }
+
+    func navigateDown() {
+        guard selectionTool == .element, !currentHierarchy.isEmpty else { return }
+        guard lastCaptureFrame == nil else { return }
+        if hierarchyIndex > 0 {
+            hierarchyIndex -= 1
+            displayHierarchyLevel()
+        }
+    }
+
+    private func displayHierarchyLevel() {
+        guard hierarchyIndex < currentHierarchy.count else { return }
+        let node = currentHierarchy[hierarchyIndex]
+        hoverFrame = overlayController.convertScreenRectToSwiftUIRect(node.screenFrame)
+        hoverInfo = "\(node.description)  (\(hierarchyIndex + 1)/\(currentHierarchy.count))"
+        statusText = "↑↓ Navigate hierarchy • Click to capture"
     }
 
     // MARK: - Clipboard / UI actions
@@ -113,6 +151,9 @@ public final class SwiftGrabManager: ObservableObject {
     func retakeSelection() {
         lastCaptureFrame = nil
         overlayController.setAcceptsKeyInput(false)
+        currentHierarchy = []
+        hierarchyIndex = 0
+        lastInspection = nil
         statusText = selectionTool == .element
             ? "Element mode: click a target to capture."
             : "Region mode: click first corner, then opposite corner."
@@ -124,18 +165,35 @@ public final class SwiftGrabManager: ObservableObject {
         trackingMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
             Task { @MainActor in
                 guard let self else { return }
-                // NSEvent.locationInWindow is in AppKit window coords (origin bottom-left)
                 guard let screenPoint = self.overlayController.convertWindowPointToScreen(event.locationInWindow) else { return }
                 self.updateHover(for: screenPoint)
             }
             return event
         }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            guard event.keyCode == 53 else { return event } // ESC
-            Task { @MainActor in
-                self?.cancelRegionDrag()
+            switch event.keyCode {
+            case 53: // ESC
+                Task { @MainActor in
+                    guard let self else { return }
+                    if self.hierarchyIndex > 0 {
+                        // Reset traversal back to deepest
+                        self.hierarchyIndex = 0
+                        self.displayHierarchyLevel()
+                        self.statusText = "Element mode: click a target to capture."
+                    } else {
+                        self.stop()
+                    }
+                }
+                return nil
+            case 126: // Arrow Up
+                Task { @MainActor in self?.navigateUp() }
+                return nil
+            case 125: // Arrow Down
+                Task { @MainActor in self?.navigateDown() }
+                return nil
+            default:
+                return event
             }
-            return nil
         }
     }
 
@@ -151,11 +209,14 @@ public final class SwiftGrabManager: ObservableObject {
     }
 
     private func updateHover(for screenPoint: CGPoint) {
-        // Don't update hover while the post-capture panel is showing.
         guard lastCaptureFrame == nil else { return }
+        // Freeze hover while user is traversing the hierarchy with arrow keys
+        guard hierarchyIndex == 0 else { return }
         switch selectionTool {
         case .element:
             let inspection = AppLocalInspector.inspect(at: screenPoint)
+            lastInspection = inspection
+            currentHierarchy = inspection.hierarchyNodes
             hoverFrame = overlayController.convertScreenRectToSwiftUIRect(inspection.screenFrame)
             hoverInfo = inspection.metadata.elementDescription
         case .region:
@@ -167,44 +228,37 @@ public final class SwiftGrabManager: ObservableObject {
         }
     }
 
-    private func cancelRegionDrag() {
-        regionDragStart = nil
-        regionSizeText = nil
-        lastCaptureFrame = nil
-        statusText = "Region selection cancelled."
-    }
-
     // MARK: - Capture
 
-    private func capture(at screenPoint: CGPoint) {
+    private func captureAtCurrentLevel(screenPoint: CGPoint) {
+        // Use the stored hierarchy level if available
         let frame: CGRect
-        let inspection: AppLocalInspectionResult
-        switch selectionTool {
-        case .element:
-            inspection = AppLocalInspector.inspect(at: screenPoint)
+        var metadata: GrabPayload.GrabMetadata
+
+        if !currentHierarchy.isEmpty, let inspection = lastInspection {
+            let node = currentHierarchy[hierarchyIndex]
+            frame = node.screenFrame.isEmpty ? inspection.screenFrame : node.screenFrame
+            metadata = inspection.metadata
+            metadata.elementDescription = node.description
+        } else {
+            let inspection = AppLocalInspector.inspect(at: screenPoint)
             frame = inspection.screenFrame
-        case .region:
-            frame = hoverFrame ?? CGRect(x: screenPoint.x - 90, y: screenPoint.y - 60, width: 180, height: 120)
-            inspection = AppLocalInspectionResult(
-                screenFrame: frame,
-                cursorPoint: screenPoint,
-                metadata: GrabPayload.GrabMetadata(
-                    appBundleIdentifier: Bundle.main.bundleIdentifier,
-                    processIdentifier: ProcessInfo.processInfo.processIdentifier
-                )
-            )
+            metadata = inspection.metadata
         }
 
         let payload = GrabPayload(
             mode: .appLocal,
             screenFrame: frame,
-            cursorPoint: inspection.cursorPoint,
+            cursorPoint: screenPoint,
             userNote: userNote.isEmpty ? nil : userNote,
-            metadata: inspection.metadata
+            metadata: metadata
         )
         lastPayload = payload
         lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(frame)
         hoverInfo = nil
+        currentHierarchy = []
+        hierarchyIndex = 0
+        lastInspection = nil
         overlayController.setAcceptsKeyInput(true)
         statusText = "Captured element. Copy payload or pick again."
         captureHandler?(payload)
@@ -263,7 +317,6 @@ public final class SwiftGrabManager: ObservableObject {
         capture(regionRect: rect, cursorPoint: screenPoint)
     }
 
-    /// Convert an AppKit screen point to a SwiftUI overlay point.
     private func swiftUIPoint(fromScreenPoint screenPoint: CGPoint) -> CGPoint? {
         guard let rect = overlayController.convertScreenRectToSwiftUIRect(
             CGRect(origin: screenPoint, size: CGSize(width: 1, height: 1))
