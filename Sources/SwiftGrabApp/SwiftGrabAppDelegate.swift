@@ -8,7 +8,6 @@ final class SwiftGrabAppDelegate: NSObject, NSApplicationDelegate {
     private var localMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)
         panelManager = MenuBarPanelManager()
         installHotkeyMonitors()
 
@@ -16,6 +15,10 @@ final class SwiftGrabAppDelegate: NSObject, NSApplicationDelegate {
         if !AccessibilityPermission.isTrusted {
             panelManager?.showPanelOnLaunch()
         }
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false // Stay alive as menu bar app even with no windows
     }
 
     func applicationWillTerminate(_ notification: Notification) {
