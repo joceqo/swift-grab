@@ -8,81 +8,59 @@ struct GrabToolbarView: View {
     var onCancel: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                modePicker
-                closeButton
-            }
-
-            Text(statusText)
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
-    }
-
-    // MARK: - Mode picker (segmented)
-
-    private var modePicker: some View {
-        HStack(spacing: 2) {
-            modeTab(
-                title: "Element",
-                icon: "scope",
+        HStack(spacing: 0) {
+            // Element mode
+            toolbarIcon(
+                systemName: "scope",
                 isSelected: !isRegionMode,
                 action: onSelectElement
             )
-            modeTab(
-                title: "Region",
-                icon: "rectangle.dashed",
+
+            divider
+
+            // Region mode
+            toolbarIcon(
+                systemName: "rectangle.dashed",
                 isSelected: isRegionMode,
                 action: onSelectRegion
             )
+
+            divider
+
+            // Close
+            Button(action: onCancel) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color(white: 0.55))
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .padding(3)
-        .background(Color.primary.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
     }
 
-    private func modeTab(
-        title: String,
-        icon: String,
+    private func toolbarIcon(
+        systemName: String,
         isSelected: Bool,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? .white : .secondary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.accentColor : Color.clear)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isSelected ? Color.accentColor : Color(white: 0.55))
+                .frame(width: 36, height: 32)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
 
-    // MARK: - Close button
-
-    private var closeButton: some View {
-        Button(action: onCancel) {
-            Image(systemName: "xmark")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary)
-                .frame(width: 22, height: 22)
-                .background(Color.primary.opacity(0.08))
-                .clipShape(Circle())
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
+    private var divider: some View {
+        Rectangle()
+            .fill(Color(white: 0.9))
+            .frame(width: 1, height: 16)
     }
 }

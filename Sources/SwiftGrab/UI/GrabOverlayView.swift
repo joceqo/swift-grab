@@ -8,9 +8,8 @@ struct GrabOverlayView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
+        ZStack {
             // Layer 1: Full-screen gesture target — only during selection.
-            // Removed when post-capture so TextField/buttons receive events.
             if isSelecting {
                 Color.clear
                     .contentShape(Rectangle())
@@ -28,57 +27,55 @@ struct GrabOverlayView: View {
                     )
             }
 
-            // Layer 2: Decorations — hover highlight, tooltip, region size.
-            // Non-interactive so clicks pass through to the gesture layer or controls.
+            // Layer 2: Decorations (non-interactive)
             decorationsLayer
                 .allowsHitTesting(false)
 
-            // Layer 3: Interactive controls — toolbar or post-capture panel.
+            // Layer 3: Interactive controls
             controlsLayer
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Decorations (non-interactive)
+    // MARK: - Decorations
 
     @ViewBuilder
     private var decorationsLayer: some View {
         if let hoverRect = manager.hoverFrame {
-            // Blue highlight rectangle
+            // Highlight rectangle
             Rectangle()
                 .stroke(Color.accentColor, lineWidth: 2)
-                .background(Color.accentColor.opacity(0.10))
+                .background(Color.accentColor.opacity(0.08))
                 .frame(width: hoverRect.width, height: hoverRect.height)
                 .position(x: hoverRect.midX, y: hoverRect.midY)
 
-            // Element tooltip (element mode only)
+            // Element tag badge (element mode)
             if !manager.isRegionToolSelected, let info = manager.hoverInfo {
-                Text(info)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-                    .position(x: hoverRect.midX, y: hoverRect.maxY + 16)
+                tagBadge(info)
+                    .position(x: hoverRect.midX, y: hoverRect.maxY + 14)
             }
 
-            // Region size label (region mode only)
+            // Region size (region mode)
             if manager.isRegionToolSelected, let sizeText = manager.regionSizeText {
-                Text(sizeText)
-                    .font(.caption.monospacedDigit())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.regularMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                tagBadge(sizeText)
                     .position(x: hoverRect.midX, y: hoverRect.minY - 14)
             }
         }
     }
 
-    // MARK: - Interactive controls
+    private func tagBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.black)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+            .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+    }
+
+    // MARK: - Controls
 
     @ViewBuilder
     private var controlsLayer: some View {
@@ -86,6 +83,7 @@ struct GrabOverlayView: View {
             postCapturePanel(at: capturedFrame)
         } else {
             VStack {
+                Spacer()
                 GrabToolbarView(
                     isRegionMode: manager.isRegionToolSelected,
                     statusText: manager.statusText,
@@ -93,8 +91,7 @@ struct GrabOverlayView: View {
                     onSelectRegion: { manager.setSelectionTool(.region) },
                     onCancel: { manager.stop() }
                 )
-                .padding(.top, 16)
-                Spacer()
+                .padding(.bottom, 24)
             }
             .frame(maxWidth: .infinity)
         }
@@ -103,50 +100,64 @@ struct GrabOverlayView: View {
     // MARK: - Post-capture panel
 
     private func postCapturePanel(at capturedFrame: CGRect) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            // Element description header
+        VStack(alignment: .leading, spacing: 0) {
+            // Tag + element description
             if let desc = manager.lastElementDescription {
                 HStack(spacing: 6) {
-                    Image(systemName: "scope")
-                        .foregroundStyle(.blue)
-                        .font(.caption)
                     Text(desc)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.black)
                         .lineLimit(1)
                 }
+                .padding(.horizontal, 10)
+                .padding(.top, 8)
+                .padding(.bottom, 6)
             }
 
-            // Note input
-            VStack(alignment: .leading, spacing: 4) {
-                Text("What should AI look at?")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                TextField("e.g. button not aligned, text truncated...", text: $manager.userNote)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 300)
-            }
+            // Divider
+            Rectangle()
+                .fill(Color(white: 0.93))
+                .frame(height: 1)
 
-            // Actions
-            HStack(spacing: 8) {
-                Button(action: { manager.copyLastPayloadAndClose() }) {
-                    Label("Copy & Close", systemImage: "doc.on.clipboard")
+            // Note input + actions
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Add context...", text: $manager.userNote)
+                    .font(.system(size: 12))
+                    .textFieldStyle(.plain)
+                    .frame(minWidth: 240)
+
+                HStack(spacing: 6) {
+                    Button(action: { manager.copyLastPayloadAndClose() }) {
+                        Text("Copy & Close")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.return, modifiers: [])
+
+                    Button(action: { manager.retakeSelection() }) {
+                        Text("Retake")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(Color(white: 0.4))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(Color(white: 0.95))
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .keyboardShortcut(.return, modifiers: [])
-                .buttonStyle(.borderedProminent)
-
-                Button("Retake", action: { manager.retakeSelection() })
-                    .buttonStyle(.bordered)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
-        .padding(12)
-        .background(.regularMaterial)
+        .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-        )
         .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-        .position(x: capturedFrame.midX, y: capturedFrame.maxY + 60)
+        .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .position(x: capturedFrame.midX, y: capturedFrame.maxY + 48)
     }
 }
