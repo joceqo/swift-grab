@@ -74,4 +74,5 @@ public struct GrabPayload: Codable, Sendable {
 
 public enum GrabMode: String, Codable, Sendable {
     case appLocal
+    case global
 }

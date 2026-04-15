@@ -49,6 +49,14 @@ final class GrabOverlayWindowController {
         }
     }
 
+    /// Temporarily make the overlay transparent to AX hit testing so
+    /// AXUIElementCopyElementAtPosition sees through to the apps underneath.
+    func withPassthrough<T>(_ body: () -> T) -> T {
+        panel?.ignoresMouseEvents = true
+        defer { panel?.ignoresMouseEvents = false }
+        return body()
+    }
+
     /// Convert an AppKit window-local point (from NSEvent.locationInWindow) to screen coordinates.
     func convertWindowPointToScreen(_ windowPoint: CGPoint) -> CGPoint? {
         guard let panel else { return nil }

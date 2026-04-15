@@ -1,27 +1,39 @@
 import AppKit
 import CoreGraphics
 
-struct HierarchyNode: Sendable {
-    var description: String
-    var screenFrame: CGRect
+public struct HierarchyNode: Sendable {
+    public var description: String
+    public var screenFrame: CGRect
+
+    public init(description: String, screenFrame: CGRect) {
+        self.description = description
+        self.screenFrame = screenFrame
+    }
 }
 
-struct AppLocalInspectionResult {
-    var screenFrame: CGRect
-    var cursorPoint: CGPoint
-    var metadata: GrabPayload.GrabMetadata
-    var hierarchyNodes: [HierarchyNode]
+public struct InspectionResult: Sendable {
+    public var screenFrame: CGRect
+    public var cursorPoint: CGPoint
+    public var metadata: GrabPayload.GrabMetadata
+    public var hierarchyNodes: [HierarchyNode]
+
+    public init(screenFrame: CGRect, cursorPoint: CGPoint, metadata: GrabPayload.GrabMetadata, hierarchyNodes: [HierarchyNode]) {
+        self.screenFrame = screenFrame
+        self.cursorPoint = cursorPoint
+        self.metadata = metadata
+        self.hierarchyNodes = hierarchyNodes
+    }
 }
 
 @MainActor
 enum AppLocalInspector {
-    static func inspect(at screenPoint: CGPoint) -> AppLocalInspectionResult {
+    public static func inspect(at screenPoint: CGPoint) -> InspectionResult {
         let candidateWindows = NSApp.windows
             .filter { $0.isVisible && !$0.isMiniaturized }
             .filter { !$0.isKind(of: NSPanel.self) }
 
         guard let window = candidateWindows.last(where: { $0.frame.contains(screenPoint) }) else {
-            return AppLocalInspectionResult(
+            return InspectionResult(
                 screenFrame: CGRect(origin: screenPoint, size: CGSize(width: 1, height: 1)),
                 cursorPoint: screenPoint,
                 metadata: buildMetadata(window: nil, view: nil, axInfo: nil, hierarchy: nil),
@@ -63,7 +75,7 @@ enum AppLocalInspector {
 
         let metadata = buildMetadata(window: window, view: deepView, axInfo: axInfo, hierarchy: hierarchy)
 
-        return AppLocalInspectionResult(
+        return InspectionResult(
             screenFrame: deepFrame,
             cursorPoint: screenPoint,
             metadata: metadata,

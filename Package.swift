@@ -16,6 +16,10 @@ let package = Package(
         .executable(
             name: "SwiftGrabDemo",
             targets: ["SwiftGrabDemo"]
+        ),
+        .executable(
+            name: "SwiftGrabApp",
+            targets: ["SwiftGrabApp"]
         )
     ],
     targets: [
@@ -24,6 +28,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "SwiftGrabDemo",
+            dependencies: ["SwiftGrab"]
+        ),
+        .executableTarget(
+            name: "SwiftGrabApp",
             dependencies: ["SwiftGrab"]
         ),
         .testTarget(

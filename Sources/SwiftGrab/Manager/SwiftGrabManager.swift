@@ -23,13 +23,13 @@ public final class SwiftGrabManager: ObservableObject {
     private var keyMonitor: Any?
     private var lastPayload: GrabPayload?
     private var captureHandler: (@MainActor (GrabPayload) -> Void)?
-    private(set) var currentMode: GrabMode?
+    public private(set) var currentMode: GrabMode?
     private var regionDragStart: CGPoint?
 
     // Hierarchy traversal state
     private var currentHierarchy: [HierarchyNode] = []
     private var hierarchyIndex: Int = 0
-    private var lastInspection: AppLocalInspectionResult?
+    private var lastInspection: InspectionResult?
 
     public init() {}
 
@@ -208,13 +208,22 @@ public final class SwiftGrabManager: ObservableObject {
         keyMonitor = nil
     }
 
+    private func inspectElement(at screenPoint: CGPoint) -> InspectionResult {
+        if currentMode == .global {
+            return overlayController.withPassthrough {
+                GlobalInspector.inspect(at: screenPoint)
+            }
+        }
+        return AppLocalInspector.inspect(at: screenPoint)
+    }
+
     private func updateHover(for screenPoint: CGPoint) {
         guard lastCaptureFrame == nil else { return }
         // Freeze hover while user is traversing the hierarchy with arrow keys
         guard hierarchyIndex == 0 else { return }
         switch selectionTool {
         case .element:
-            let inspection = AppLocalInspector.inspect(at: screenPoint)
+            let inspection = inspectElement(at: screenPoint)
             lastInspection = inspection
             currentHierarchy = inspection.hierarchyNodes
             hoverFrame = overlayController.convertScreenRectToSwiftUIRect(inspection.screenFrame)
@@ -241,13 +250,13 @@ public final class SwiftGrabManager: ObservableObject {
             metadata = inspection.metadata
             metadata.elementDescription = node.description
         } else {
-            let inspection = AppLocalInspector.inspect(at: screenPoint)
+            let inspection = inspectElement(at: screenPoint)
             frame = inspection.screenFrame
             metadata = inspection.metadata
         }
 
         let payload = GrabPayload(
-            mode: .appLocal,
+            mode: currentMode ?? .appLocal,
             screenFrame: frame,
             cursorPoint: screenPoint,
             userNote: userNote.isEmpty ? nil : userNote,
@@ -270,7 +279,7 @@ public final class SwiftGrabManager: ObservableObject {
             processIdentifier: ProcessInfo.processInfo.processIdentifier
         )
         let payload = GrabPayload(
-            mode: .appLocal,
+            mode: currentMode ?? .appLocal,
             screenFrame: regionRect,
             cursorPoint: cursorPoint,
             userNote: userNote.isEmpty ? nil : userNote,
