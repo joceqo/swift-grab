@@ -13,7 +13,6 @@ public final class SwiftGrabManager: ObservableObject {
     @Published var hoverFrame: CGRect?
     @Published var hoverInfo: String?
     @Published var userNote: String = ""
-    @Published var permissionMessage: String?
     @Published var regionSizeText: String?
     @Published var statusText: String = "Element mode: click a target to capture."
     @Published var lastCaptureFrame: CGRect?
@@ -196,35 +195,19 @@ public final class SwiftGrabManager: ObservableObject {
             )
         }
 
-        var errors: [String] = []
-        Task { @MainActor in
-            var base64: String?
-            do {
-                base64 = try await ScreenshotCapturer.capturePNGBase64(in: frame)
-                permissionMessage = nil
-            } catch GrabCaptureError.screenRecordingPermissionRequired {
-                permissionMessage = "Grant Screen Recording in System Settings > Privacy & Security."
-                errors.append(GrabCaptureError.screenRecordingPermissionRequired.localizedDescription)
-            } catch {
-                errors.append(error.localizedDescription)
-            }
-
-            let payload = GrabPayload(
-                mode: .appLocal,
-                screenFrame: frame,
-                cursorPoint: inspection.cursorPoint,
-                userNote: userNote.isEmpty ? nil : userNote,
-                metadata: inspection.metadata,
-                screenshotPNGBase64: base64,
-                errors: errors
-            )
-            lastPayload = payload
-            lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(frame)
-            hoverInfo = nil
-            overlayController.setAcceptsKeyInput(true)
-            statusText = "Captured element. Copy payload or pick again."
-            captureHandler?(payload)
-        }
+        let payload = GrabPayload(
+            mode: .appLocal,
+            screenFrame: frame,
+            cursorPoint: inspection.cursorPoint,
+            userNote: userNote.isEmpty ? nil : userNote,
+            metadata: inspection.metadata
+        )
+        lastPayload = payload
+        lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(frame)
+        hoverInfo = nil
+        overlayController.setAcceptsKeyInput(true)
+        statusText = "Captured element. Copy payload or pick again."
+        captureHandler?(payload)
     }
 
     private func capture(regionRect: CGRect, cursorPoint: CGPoint) {
@@ -232,44 +215,19 @@ public final class SwiftGrabManager: ObservableObject {
             appBundleIdentifier: Bundle.main.bundleIdentifier,
             processIdentifier: ProcessInfo.processInfo.processIdentifier
         )
-        Task { @MainActor in
-            var errors: [String] = []
-            var base64: String?
-            do {
-                base64 = try await ScreenshotCapturer.capturePNGBase64(in: regionRect)
-                permissionMessage = nil
-            } catch GrabCaptureError.screenRecordingPermissionRequired {
-                permissionMessage = "Grant Screen Recording in System Settings > Privacy & Security."
-                errors.append(GrabCaptureError.screenRecordingPermissionRequired.localizedDescription)
-            } catch {
-                errors.append(error.localizedDescription)
-            }
-
-            let payload = GrabPayload(
-                mode: .appLocal,
-                screenFrame: regionRect,
-                cursorPoint: cursorPoint,
-                userNote: userNote.isEmpty ? nil : userNote,
-                metadata: metadata,
-                screenshotPNGBase64: base64,
-                errors: errors
-            )
-            lastPayload = payload
-            lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(regionRect)
-            hoverInfo = nil
-            overlayController.setAcceptsKeyInput(true)
-            statusText = "Captured region. Copy payload or pick again."
-            captureHandler?(payload)
-        }
-    }
-
-    func requestScreenRecordingPermission() {
-        if CGPreflightScreenCaptureAccess() {
-            permissionMessage = nil
-            return
-        }
-        _ = CGRequestScreenCaptureAccess()
-        permissionMessage = "If denied, enable Screen Recording for this app in System Settings."
+        let payload = GrabPayload(
+            mode: .appLocal,
+            screenFrame: regionRect,
+            cursorPoint: cursorPoint,
+            userNote: userNote.isEmpty ? nil : userNote,
+            metadata: metadata
+        )
+        lastPayload = payload
+        lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(regionRect)
+        hoverInfo = nil
+        overlayController.setAcceptsKeyInput(true)
+        statusText = "Captured region. Copy payload or pick again."
+        captureHandler?(payload)
     }
 
     // MARK: - Region helpers

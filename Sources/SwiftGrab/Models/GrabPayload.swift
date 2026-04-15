@@ -11,6 +11,7 @@ public struct GrabPayload: Codable, Sendable {
         public var accessibilityTitle: String?
         public var accessibilityValue: String?
         public var elementDescription: String?
+        public var viewHierarchy: [String]?
         public var timestamp: Date
 
         public init(
@@ -22,6 +23,7 @@ public struct GrabPayload: Codable, Sendable {
             accessibilityTitle: String? = nil,
             accessibilityValue: String? = nil,
             elementDescription: String? = nil,
+            viewHierarchy: [String]? = nil,
             timestamp: Date = Date()
         ) {
             self.appBundleIdentifier = appBundleIdentifier
@@ -32,6 +34,7 @@ public struct GrabPayload: Codable, Sendable {
             self.accessibilityTitle = accessibilityTitle
             self.accessibilityValue = accessibilityValue
             self.elementDescription = elementDescription
+            self.viewHierarchy = viewHierarchy
             self.timestamp = timestamp
         }
     }
@@ -41,7 +44,6 @@ public struct GrabPayload: Codable, Sendable {
     public var cursorPoint: CGPoint
     public var userNote: String?
     public var metadata: GrabMetadata
-    public var screenshotPNGBase64: String?
     public var errors: [String]
 
     public init(
@@ -50,7 +52,6 @@ public struct GrabPayload: Codable, Sendable {
         cursorPoint: CGPoint,
         userNote: String? = nil,
         metadata: GrabMetadata,
-        screenshotPNGBase64: String? = nil,
         errors: [String] = []
     ) {
         self.mode = mode
@@ -58,7 +59,6 @@ public struct GrabPayload: Codable, Sendable {
         self.cursorPoint = cursorPoint
         self.userNote = userNote
         self.metadata = metadata
-        self.screenshotPNGBase64 = screenshotPNGBase64
         self.errors = errors
     }
 

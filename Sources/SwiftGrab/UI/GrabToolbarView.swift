@@ -2,12 +2,10 @@ import SwiftUI
 
 struct GrabToolbarView: View {
     var isRegionMode: Bool
-    var permissionMessage: String?
     var statusText: String
     var onSelectElement: () -> Void
     var onSelectRegion: () -> Void
     var onCancel: () -> Void
-    var onRequestPermission: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -20,10 +18,6 @@ struct GrabToolbarView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
-
-            if let permissionMessage {
-                permissionBanner(permissionMessage)
-            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -90,24 +84,5 @@ struct GrabToolbarView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-    }
-
-    // MARK: - Permission banner
-
-    private func permissionBanner(_ message: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .font(.system(size: 10))
-            Text(message)
-                .font(.system(size: 10))
-                .foregroundStyle(.orange)
-                .lineLimit(2)
-            Button("Grant", action: onRequestPermission)
-                .font(.system(size: 10, weight: .medium))
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-        }
-        .frame(maxWidth: 320, alignment: .leading)
     }
 }

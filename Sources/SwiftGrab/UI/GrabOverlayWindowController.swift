@@ -11,7 +11,7 @@ final class GrabOverlayWindowController {
 
         let panel = GrabPanel(
             contentRect: screen.frame,
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
@@ -25,6 +25,7 @@ final class GrabOverlayWindowController {
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = false
+        panel.becomesKeyOnlyIfNeeded = true
 
         let hosting = NSHostingView(rootView: GrabOverlayView(manager: manager))
         hosting.frame = panel.contentView?.bounds ?? .zero

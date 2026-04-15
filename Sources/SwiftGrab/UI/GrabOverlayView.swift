@@ -88,12 +88,10 @@ struct GrabOverlayView: View {
             VStack {
                 GrabToolbarView(
                     isRegionMode: manager.isRegionToolSelected,
-                    permissionMessage: manager.permissionMessage,
                     statusText: manager.statusText,
                     onSelectElement: { manager.setSelectionTool(.element) },
                     onSelectRegion: { manager.setSelectionTool(.region) },
-                    onCancel: { manager.stop() },
-                    onRequestPermission: { manager.requestScreenRecordingPermission() }
+                    onCancel: { manager.stop() }
                 )
                 .padding(.top, 16)
                 Spacer()
@@ -120,9 +118,14 @@ struct GrabOverlayView: View {
             }
 
             // Note input
-            TextField("Add a note for AI...", text: $manager.userNote)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 300)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("What should AI look at?")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                TextField("e.g. button not aligned, text truncated...", text: $manager.userNote)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 300)
+            }
 
             // Actions
             HStack(spacing: 8) {
