@@ -3,29 +3,24 @@ import SwiftUI
 struct GrabOverlayView: View {
     @ObservedObject var manager: SwiftGrabManager
 
-    private var isSelecting: Bool {
-        manager.lastCaptureFrame == nil
-    }
-
     var body: some View {
         ZStack {
-            // Layer 1: Full-screen gesture target — only during selection.
-            if isSelecting {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { location in
-                        manager.handleClick(atSwiftUIPoint: location)
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 4)
-                            .onChanged { value in
-                                manager.handleRegionDragChanged(atSwiftUIPoint: value.location)
-                            }
-                            .onEnded { value in
-                                manager.handleRegionDragEnded(atSwiftUIPoint: value.location)
-                            }
-                    )
-            }
+            // Layer 1: Full-screen gesture target. Stays active post-capture so a
+            // new click replaces the current capture without needing to hit Retake.
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture { location in
+                    manager.handleClick(atSwiftUIPoint: location)
+                }
+                .gesture(
+                    DragGesture(minimumDistance: 4)
+                        .onChanged { value in
+                            manager.handleRegionDragChanged(atSwiftUIPoint: value.location)
+                        }
+                        .onEnded { value in
+                            manager.handleRegionDragEnded(atSwiftUIPoint: value.location)
+                        }
+                )
 
             // Layer 2: Decorations (non-interactive)
             decorationsLayer
@@ -61,6 +56,14 @@ struct GrabOverlayView: View {
                     .position(x: hoverRect.midX, y: hoverRect.minY - 14)
             }
         }
+
+        if !manager.isRegionToolSelected,
+           manager.lastCaptureFrame == nil,
+           let cursorPoint = manager.hoverCursorPoint,
+           let info = manager.hoverContextInfo {
+            tagBadge(info)
+                .position(x: cursorPoint.x + 110, y: cursorPoint.y + 20)
+        }
     }
 
     private func tagBadge(_ text: String) -> some View {
@@ -79,8 +82,14 @@ struct GrabOverlayView: View {
 
     @ViewBuilder
     private var controlsLayer: some View {
-        if let capturedFrame = manager.lastCaptureFrame {
-            postCapturePanel(at: capturedFrame)
+        if manager.lastCaptureFrame != nil {
+            VStack {
+                Spacer()
+                postCapturePanel()
+                    .background(controlsRectReporter)
+                    .padding(.bottom, 24)
+            }
+            .frame(maxWidth: .infinity)
         } else {
             VStack {
                 Spacer()
@@ -91,28 +100,47 @@ struct GrabOverlayView: View {
                     onSelectRegion: { manager.setSelectionTool(.region) },
                     onCancel: { manager.stop() }
                 )
+                .background(controlsRectReporter)
                 .padding(.bottom, 24)
             }
             .frame(maxWidth: .infinity)
         }
     }
 
+    private var controlsRectReporter: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .onAppear { manager.controlsSwiftUIRect = proxy.frame(in: .global) }
+                .onChange(of: proxy.frame(in: .global)) { newValue in
+                    manager.controlsSwiftUIRect = newValue
+                }
+        }
+    }
+
     // MARK: - Post-capture panel
 
-    private func postCapturePanel(at capturedFrame: CGRect) -> some View {
+    private func postCapturePanel() -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Tag + element description
-            if let desc = manager.lastElementDescription {
-                HStack(spacing: 6) {
-                    Text(desc)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.black)
+            // App + element description
+            VStack(alignment: .leading, spacing: 2) {
+                if let app = manager.lastCapturedAppName {
+                    Text(app)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
                         .lineLimit(1)
                 }
-                .padding(.horizontal, 10)
-                .padding(.top, 8)
-                .padding(.bottom, 6)
+                if let desc = manager.lastElementDescription {
+                    Text(desc)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.black)
+                        .lineLimit(2)
+                        .truncationMode(.middle)
+                }
             }
+            .frame(maxWidth: 360, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
 
             // Divider
             Rectangle()
@@ -124,7 +152,7 @@ struct GrabOverlayView: View {
                 TextField("Add context...", text: $manager.userNote)
                     .font(.system(size: 12))
                     .textFieldStyle(.plain)
-                    .frame(minWidth: 240)
+                    .frame(minWidth: 300)
 
                 HStack(spacing: 6) {
                     Button(action: { manager.copyLastPayloadAndClose() }) {
@@ -151,13 +179,14 @@ struct GrabOverlayView: View {
                     .buttonStyle(.plain)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .background(.white)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
-        .position(x: capturedFrame.midX, y: capturedFrame.maxY + 48)
+        .fixedSize()
+        .environment(\.colorScheme, .light)
     }
 }

@@ -41,6 +41,7 @@ struct GrabToolbarView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .environment(\.colorScheme, .light)
     }
 
     private func toolbarIcon(

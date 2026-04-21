@@ -2,8 +2,13 @@ import SwiftUI
 import SwiftGrab
 
 struct MenuBarPanelView: View {
+    var onStartInspector: (() -> Void)?
+
+    @ObservedObject private var manager = SwiftGrabManager.shared
     @State private var isTrusted = AccessibilityPermission.isTrusted
-    @State private var isInspecting = SwiftGrabManager.shared.currentMode != nil
+    @State private var debugSnapshot = AccessibilityPermission.debugSnapshot()
+
+    private var isInspecting: Bool { manager.currentMode != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -49,10 +54,24 @@ struct MenuBarPanelView: View {
                     .buttonStyle(.plain)
 
                     Button("Check Again") {
+                        AccessibilityPermission.logTrustCheck(context: "menu-check-again-before")
                         isTrusted = AccessibilityPermission.isTrusted
+                        debugSnapshot = AccessibilityPermission.debugSnapshot()
+                        print("[SwiftGrabApp][Accessibility] menu-check-again result=\(isTrusted)")
                     }
                     .font(.system(size: 11))
                     .frame(maxWidth: .infinity)
+
+                    Divider()
+                        .padding(.top, 2)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        debugRow("Trusted", debugSnapshot.trusted ? "yes" : "no")
+                        debugRow("PID", "\(debugSnapshot.pid)")
+                        debugRow("Bundle ID", debugSnapshot.bundleID)
+                        debugRow("Bundle Path", debugSnapshot.bundlePath)
+                    }
+                    .padding(.top, 2)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -89,6 +108,11 @@ struct MenuBarPanelView: View {
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         .shadow(color: .black.opacity(0.14), radius: 12, y: 4)
         .shadow(color: .black.opacity(0.04), radius: 1, y: 1)
+        .environment(\.colorScheme, .light)
+        .onAppear {
+            debugSnapshot = AccessibilityPermission.debugSnapshot()
+            isTrusted = debugSnapshot.trusted
+        }
     }
 
     // MARK: - Helpers
@@ -111,14 +135,28 @@ struct MenuBarPanelView: View {
         .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
     }
 
+    private func debugRow(_ label: String, _ value: String) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            Text("\(label):")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .truncationMode(.middle)
+            Spacer(minLength: 0)
+        }
+    }
+
     private func toggleInspector() {
-        if SwiftGrabManager.shared.currentMode != nil {
-            SwiftGrabManager.shared.stop()
-            isInspecting = false
+        if manager.currentMode != nil {
+            manager.stop()
         } else {
             guard isTrusted else { return }
-            SwiftGrabManager.shared.start(mode: .global)
-            isInspecting = true
+            // Hide panel first so overlay doesn't inspect itself.
+            onStartInspector?()
+            manager.start(mode: .global)
         }
     }
 

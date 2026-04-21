@@ -12,6 +12,7 @@ final class MenuBarPanelManager: NSObject {
     private var statusItem: NSStatusItem?
     private var panel: KeyablePanel?
     private var clickOutsideMonitor: Any?
+    private var clickOutsideLocalMonitor: Any?
     private let panelWidth: CGFloat = 260
 
     override init() {
@@ -20,24 +21,31 @@ final class MenuBarPanelManager: NSObject {
     }
 
     func cleanup() {
-        if let monitor = clickOutsideMonitor {
-            NSEvent.removeMonitor(monitor)
-            clickOutsideMonitor = nil
-        }
+        removeClickOutsideMonitor()
     }
 
     // MARK: - Status Item
 
     private func createStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+
         guard let button = statusItem?.button else { return }
 
-        button.image = NSImage(systemSymbolName: "scope", accessibilityDescription: "SwiftGrab")
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+        let image = NSImage(systemSymbolName: "scope", accessibilityDescription: "SwiftGrab")?
+            .withSymbolConfiguration(config)
+        image?.isTemplate = true
+        button.image = image
         button.target = self
         button.action = #selector(statusItemClicked)
     }
 
     @objc private func statusItemClicked() {
+        if SwiftGrabManager.shared.currentMode != nil {
+            SwiftGrabManager.shared.stop()
+            showPanel()
+            return
+        }
         if let panel, panel.isVisible {
             hidePanel()
         } else {
@@ -66,17 +74,14 @@ final class MenuBarPanelManager: NSObject {
         removeClickOutsideMonitor()
     }
 
-    func refreshPanel() {
-        // Rebuild the panel content to reflect current state
-        guard let panel else { return }
-        let hostingView = NSHostingView(rootView: MenuBarPanelView())
-        hostingView.frame = panel.contentView?.bounds ?? .zero
-        hostingView.autoresizingMask = [.width, .height]
-        panel.contentView = hostingView
+    private func makePanelView() -> MenuBarPanelView {
+        MenuBarPanelView(onStartInspector: { [weak self] in
+            self?.hidePanel()
+        })
     }
 
     private func createPanel() {
-        let hostingView = NSHostingView(rootView: MenuBarPanelView())
+        let hostingView = NSHostingView(rootView: makePanelView())
 
         let p = KeyablePanel(
             contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: 200),
@@ -120,12 +125,27 @@ final class MenuBarPanelManager: NSObject {
                 self?.hidePanel()
             }
         }
+        clickOutsideLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            Task { @MainActor in
+                guard let self else { return }
+                // Skip status item clicks — statusItemClicked handles toggling.
+                if event.window === self.panel || event.window === self.statusItem?.button?.window {
+                    return
+                }
+                self.hidePanel()
+            }
+            return event
+        }
     }
 
     private func removeClickOutsideMonitor() {
         if let monitor = clickOutsideMonitor {
             NSEvent.removeMonitor(monitor)
             clickOutsideMonitor = nil
+        }
+        if let monitor = clickOutsideLocalMonitor {
+            NSEvent.removeMonitor(monitor)
+            clickOutsideLocalMonitor = nil
         }
     }
 }

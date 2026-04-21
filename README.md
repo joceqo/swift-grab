@@ -24,6 +24,18 @@ swift build
 swift run SwiftGrabDemo
 ```
 
+## Running the Menu Bar App
+
+Use the provided script — it builds a signed `.app` bundle so the Accessibility grant survives rebuilds:
+
+```bash
+./scripts/run.sh
+```
+
+Then grant Accessibility to `SwiftGrab.app` in **System Settings → Privacy & Security → Accessibility**.
+
+**Do not use `swift run SwiftGrabApp`.** The CLI binary path changes on every rebuild, and macOS TCC treats each rebuilt binary as a new app — the grant won't stick.
+
 ## Quick Start
 
 ```swift

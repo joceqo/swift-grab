@@ -8,8 +8,14 @@ final class SwiftGrabAppDelegate: NSObject, NSApplicationDelegate {
     private var localMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        print("[SwiftGrabApp] applicationDidFinishLaunching")
+        AccessibilityPermission.logTrustCheck(context: "applicationDidFinishLaunching")
         panelManager = MenuBarPanelManager()
+        print("[SwiftGrabApp] panelManager created")
         installHotkeyMonitors()
+        print("[SwiftGrabApp] hotkey monitors installed")
+
+        print("[SwiftGrabApp] ready")
 
         // Auto-open panel if permission not yet granted
         if !AccessibilityPermission.isTrusted {
@@ -24,6 +30,7 @@ final class SwiftGrabAppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
+        panelManager?.cleanup()
         SwiftGrabManager.shared.stop()
     }
 
@@ -54,8 +61,8 @@ final class SwiftGrabAppDelegate: NSObject, NSApplicationDelegate {
                 panelManager?.showPanel()
                 return
             }
+            panelManager?.hidePanel()
             SwiftGrabManager.shared.start(mode: .global)
         }
-        panelManager?.refreshPanel()
     }
 }
