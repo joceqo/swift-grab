@@ -1,9 +1,11 @@
 import AppKit
+import Foundation
 import SwiftUI
 
 @MainActor
 public final class SwiftGrabManager: ObservableObject {
     public static let shared = SwiftGrabManager()
+    private let logPrefix = "[SwiftGrab][Inspector]"
 
     public enum SelectionTool {
         case element
@@ -12,24 +14,33 @@ public final class SwiftGrabManager: ObservableObject {
 
     @Published var hoverFrame: CGRect?
     @Published var hoverInfo: String?
+    @Published var hoverContextInfo: String?
+    @Published var hoverCursorPoint: CGPoint?
     @Published var userNote: String = ""
     @Published var regionSizeText: String?
     @Published var statusText: String = "Element mode: click a target to capture."
     @Published var lastCaptureFrame: CGRect?
 
+    /// SwiftUI-space rect of the floating toolbar / post-capture panel. Set by the overlay
+    /// view so hover updates can be suppressed when the cursor is on overlay chrome.
+    var controlsSwiftUIRect: CGRect?
+
     private var selectionTool: SelectionTool = .element
     private var overlayController = GrabOverlayWindowController()
     private var trackingMonitor: Any?
     private var keyMonitor: Any?
+    private var globalKeyMonitor: Any?
     private var lastPayload: GrabPayload?
     private var captureHandler: (@MainActor (GrabPayload) -> Void)?
-    private(set) var currentMode: GrabMode?
+    @Published public private(set) var currentMode: GrabMode?
     private var regionDragStart: CGPoint?
 
     // Hierarchy traversal state
     private var currentHierarchy: [HierarchyNode] = []
     private var hierarchyIndex: Int = 0
-    private var lastInspection: AppLocalInspectionResult?
+    private var lastInspection: InspectionResult?
+    private var lastHoverLogSignature: String?
+    private var lastHoverLogTime = Date.distantPast
 
     public init() {}
 
@@ -38,6 +49,7 @@ public final class SwiftGrabManager: ObservableObject {
         currentMode = mode
         overlayController.present(with: self)
         installMouseTracking()
+        log("start mode=\(mode.rawValue)")
     }
 
     public func stop() {
@@ -45,6 +57,8 @@ public final class SwiftGrabManager: ObservableObject {
         overlayController.dismiss()
         hoverFrame = nil
         hoverInfo = nil
+        hoverContextInfo = nil
+        hoverCursorPoint = nil
         regionSizeText = nil
         lastCaptureFrame = nil
         currentHierarchy = []
@@ -52,6 +66,7 @@ public final class SwiftGrabManager: ObservableObject {
         lastInspection = nil
         statusText = "Element mode: click a target to capture."
         currentMode = nil
+        log("stop")
     }
 
     public func onPayloadCaptured(_ handler: @MainActor @escaping (GrabPayload) -> Void) {
@@ -63,6 +78,7 @@ public final class SwiftGrabManager: ObservableObject {
         regionDragStart = nil
         regionSizeText = nil
         hoverInfo = nil
+        hoverContextInfo = nil
         lastCaptureFrame = nil
         currentHierarchy = []
         hierarchyIndex = 0
@@ -70,6 +86,7 @@ public final class SwiftGrabManager: ObservableObject {
         statusText = tool == .element
             ? "Element mode: click a target to capture."
             : "Region mode: click first corner, then opposite corner."
+        log("selection tool=\(tool == .element ? "element" : "region")")
     }
 
     var isRegionToolSelected: Bool {
@@ -80,6 +97,7 @@ public final class SwiftGrabManager: ObservableObject {
 
     func handleClick(atSwiftUIPoint point: CGPoint) {
         guard let screenPoint = overlayController.convertSwiftUIPointToScreen(point) else { return }
+        log("click tool=\(selectionTool == .element ? "element" : "region") point=\(shortPoint(screenPoint))")
         switch selectionTool {
         case .element:
             captureAtCurrentLevel(screenPoint: screenPoint)
@@ -132,6 +150,12 @@ public final class SwiftGrabManager: ObservableObject {
         let node = currentHierarchy[hierarchyIndex]
         hoverFrame = overlayController.convertScreenRectToSwiftUIRect(node.screenFrame)
         hoverInfo = "\(node.description)  (\(hierarchyIndex + 1)/\(currentHierarchy.count))"
+        let appName = appDisplayName(from: lastInspection?.metadata)
+        if let appName {
+            hoverContextInfo = "\(appName) • \(hoverInfo ?? node.description)"
+        } else {
+            hoverContextInfo = hoverInfo
+        }
         statusText = "↑↓ Navigate hierarchy • Click to capture"
     }
 
@@ -141,8 +165,15 @@ public final class SwiftGrabManager: ObservableObject {
         lastPayload?.metadata.elementDescription
     }
 
+    var lastCapturedAppName: String? {
+        appDisplayName(from: lastPayload?.metadata)
+    }
+
     func copyLastPayloadAndClose() {
-        guard let payload = lastPayload, let json = try? payload.toJSON(prettyPrinted: true) else { return }
+        guard var payload = lastPayload else { return }
+        // Inject the note the user typed after capture before serializing.
+        payload.userNote = userNote.isEmpty ? nil : userNote
+        guard let json = try? payload.toJSON(prettyPrinted: true) else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(json, forType: .string)
         stop()
@@ -150,6 +181,7 @@ public final class SwiftGrabManager: ObservableObject {
 
     func retakeSelection() {
         lastCaptureFrame = nil
+        userNote = ""
         overlayController.setAcceptsKeyInput(false)
         currentHierarchy = []
         hierarchyIndex = 0
@@ -173,17 +205,7 @@ public final class SwiftGrabManager: ObservableObject {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             switch event.keyCode {
             case 53: // ESC
-                Task { @MainActor in
-                    guard let self else { return }
-                    if self.hierarchyIndex > 0 {
-                        // Reset traversal back to deepest
-                        self.hierarchyIndex = 0
-                        self.displayHierarchyLevel()
-                        self.statusText = "Element mode: click a target to capture."
-                    } else {
-                        self.stop()
-                    }
-                }
+                Task { @MainActor in self?.handleEscape() }
                 return nil
             case 126: // Arrow Up
                 Task { @MainActor in self?.navigateUp() }
@@ -194,6 +216,24 @@ public final class SwiftGrabManager: ObservableObject {
             default:
                 return event
             }
+        }
+        // Global monitor catches ESC even when our overlay isn't key — e.g. the
+        // user's app stays frontmost while inspector is active. Can't consume
+        // the event from a global monitor, but ESC dismisses are harmless.
+        globalKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
+            if event.keyCode == 53 {
+                Task { @MainActor in self?.handleEscape() }
+            }
+        }
+    }
+
+    private func handleEscape() {
+        if hierarchyIndex > 0 {
+            hierarchyIndex = 0
+            displayHierarchyLevel()
+            statusText = "Element mode: click a target to capture."
+        } else {
+            stop()
         }
     }
 
@@ -206,20 +246,48 @@ public final class SwiftGrabManager: ObservableObject {
             NSEvent.removeMonitor(keyMonitor)
         }
         keyMonitor = nil
+        if let globalKeyMonitor {
+            NSEvent.removeMonitor(globalKeyMonitor)
+        }
+        globalKeyMonitor = nil
+    }
+
+    private func inspectElement(at screenPoint: CGPoint) -> InspectionResult {
+        if currentMode == .global {
+            return GlobalInspector.inspect(at: screenPoint)
+        }
+        return AppLocalInspector.inspect(at: screenPoint)
     }
 
     private func updateHover(for screenPoint: CGPoint) {
-        guard lastCaptureFrame == nil else { return }
         // Freeze hover while user is traversing the hierarchy with arrow keys
         guard hierarchyIndex == 0 else { return }
+        // Suppress hover when cursor is over the floating toolbar / post-capture panel.
+        let cursorSwiftUIPoint = swiftUIPoint(fromScreenPoint: screenPoint)
+        if let controls = controlsSwiftUIRect, let p = cursorSwiftUIPoint, controls.contains(p) {
+            hoverFrame = nil
+            hoverInfo = nil
+            hoverContextInfo = nil
+            hoverCursorPoint = nil
+            return
+        }
+        hoverCursorPoint = cursorSwiftUIPoint
         switch selectionTool {
         case .element:
-            let inspection = AppLocalInspector.inspect(at: screenPoint)
+            let inspection = inspectElement(at: screenPoint)
             lastInspection = inspection
             currentHierarchy = inspection.hierarchyNodes
             hoverFrame = overlayController.convertScreenRectToSwiftUIRect(inspection.screenFrame)
             hoverInfo = inspection.metadata.elementDescription
+            let appName = appDisplayName(from: inspection.metadata)
+            if let appName, let hoverInfo {
+                hoverContextInfo = "\(appName) • \(hoverInfo)"
+            } else {
+                hoverContextInfo = hoverInfo
+            }
+            logHoverInspection(inspection)
         case .region:
+            hoverContextInfo = nil
             if regionDragStart == nil {
                 if let swiftUIPoint = swiftUIPoint(fromScreenPoint: screenPoint) {
                     hoverFrame = CGRect(x: swiftUIPoint.x - 1, y: swiftUIPoint.y - 1, width: 2, height: 2)
@@ -241,26 +309,31 @@ public final class SwiftGrabManager: ObservableObject {
             metadata = inspection.metadata
             metadata.elementDescription = node.description
         } else {
-            let inspection = AppLocalInspector.inspect(at: screenPoint)
+            let inspection = inspectElement(at: screenPoint)
             frame = inspection.screenFrame
             metadata = inspection.metadata
         }
 
+        // New capture → fresh note field.
+        userNote = ""
+
         let payload = GrabPayload(
-            mode: .appLocal,
+            mode: currentMode ?? .appLocal,
             screenFrame: frame,
             cursorPoint: screenPoint,
-            userNote: userNote.isEmpty ? nil : userNote,
+            userNote: nil,
             metadata: metadata
         )
         lastPayload = payload
         lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(frame)
         hoverInfo = nil
+        hoverContextInfo = nil
         currentHierarchy = []
         hierarchyIndex = 0
         lastInspection = nil
         overlayController.setAcceptsKeyInput(true)
         statusText = "Captured element. Copy payload or pick again."
+        log("capture element app=\(metadata.appBundleIdentifier ?? "<nil>") pid=\(metadata.processIdentifier.map(String.init) ?? "<nil>") desc=\(metadata.elementDescription ?? "<nil>") frame=\(shortRect(frame))")
         captureHandler?(payload)
     }
 
@@ -270,7 +343,7 @@ public final class SwiftGrabManager: ObservableObject {
             processIdentifier: ProcessInfo.processInfo.processIdentifier
         )
         let payload = GrabPayload(
-            mode: .appLocal,
+            mode: currentMode ?? .appLocal,
             screenFrame: regionRect,
             cursorPoint: cursorPoint,
             userNote: userNote.isEmpty ? nil : userNote,
@@ -279,8 +352,10 @@ public final class SwiftGrabManager: ObservableObject {
         lastPayload = payload
         lastCaptureFrame = overlayController.convertScreenRectToSwiftUIRect(regionRect)
         hoverInfo = nil
+        hoverContextInfo = nil
         overlayController.setAcceptsKeyInput(true)
         statusText = "Captured region. Copy payload or pick again."
+        log("capture region frame=\(shortRect(regionRect))")
         captureHandler?(payload)
     }
 
@@ -324,5 +399,45 @@ public final class SwiftGrabManager: ObservableObject {
             return nil
         }
         return rect.origin
+    }
+
+    private func appDisplayName(from metadata: GrabPayload.GrabMetadata?) -> String? {
+        guard let metadata else { return nil }
+        if let pid = metadata.processIdentifier,
+           let app = NSRunningApplication(processIdentifier: pid),
+           let localizedName = app.localizedName,
+           !localizedName.isEmpty {
+            return localizedName
+        }
+        if let bundleID = metadata.appBundleIdentifier, !bundleID.isEmpty {
+            return bundleID
+        }
+        return nil
+    }
+
+    private func log(_ message: String) {
+        print("\(logPrefix) \(message)")
+    }
+
+    private func logHoverInspection(_ inspection: InspectionResult) {
+        let metadata = inspection.metadata
+        let app = metadata.appBundleIdentifier ?? "<nil>"
+        let pid = metadata.processIdentifier.map(String.init) ?? "<nil>"
+        let desc = metadata.elementDescription ?? "<nil>"
+        let signature = "\(app)|\(pid)|\(desc)|\(shortRect(inspection.screenFrame))"
+        let now = Date()
+        let elapsed = now.timeIntervalSince(lastHoverLogTime)
+        guard signature != lastHoverLogSignature || elapsed >= 0.7 else { return }
+        lastHoverLogSignature = signature
+        lastHoverLogTime = now
+        log("hover app=\(app) pid=\(pid) desc=\(desc) frame=\(shortRect(inspection.screenFrame))")
+    }
+
+    private func shortPoint(_ point: CGPoint) -> String {
+        "(\(Int(point.x)),\(Int(point.y)))"
+    }
+
+    private func shortRect(_ rect: CGRect) -> String {
+        "[x:\(Int(rect.origin.x)) y:\(Int(rect.origin.y)) w:\(Int(rect.width)) h:\(Int(rect.height))]"
     }
 }

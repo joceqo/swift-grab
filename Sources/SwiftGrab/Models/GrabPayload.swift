@@ -8,8 +8,13 @@ public struct GrabPayload: Codable, Sendable {
         public var windowTitle: String?
         public var viewType: String?
         public var accessibilityRole: String?
+        public var accessibilitySubrole: String?
+        public var accessibilityIdentifier: String?
         public var accessibilityTitle: String?
         public var accessibilityValue: String?
+        public var accessibilityHelp: String?
+        public var accessibilityURL: String?
+        public var accessibilitySelectedText: String?
         public var elementDescription: String?
         public var viewHierarchy: [String]?
         public var timestamp: Date
@@ -20,8 +25,13 @@ public struct GrabPayload: Codable, Sendable {
             windowTitle: String? = nil,
             viewType: String? = nil,
             accessibilityRole: String? = nil,
+            accessibilitySubrole: String? = nil,
+            accessibilityIdentifier: String? = nil,
             accessibilityTitle: String? = nil,
             accessibilityValue: String? = nil,
+            accessibilityHelp: String? = nil,
+            accessibilityURL: String? = nil,
+            accessibilitySelectedText: String? = nil,
             elementDescription: String? = nil,
             viewHierarchy: [String]? = nil,
             timestamp: Date = Date()
@@ -31,8 +41,13 @@ public struct GrabPayload: Codable, Sendable {
             self.windowTitle = windowTitle
             self.viewType = viewType
             self.accessibilityRole = accessibilityRole
+            self.accessibilitySubrole = accessibilitySubrole
+            self.accessibilityIdentifier = accessibilityIdentifier
             self.accessibilityTitle = accessibilityTitle
             self.accessibilityValue = accessibilityValue
+            self.accessibilityHelp = accessibilityHelp
+            self.accessibilityURL = accessibilityURL
+            self.accessibilitySelectedText = accessibilitySelectedText
             self.elementDescription = elementDescription
             self.viewHierarchy = viewHierarchy
             self.timestamp = timestamp
@@ -74,4 +89,5 @@ public struct GrabPayload: Codable, Sendable {
 
 public enum GrabMode: String, Codable, Sendable {
     case appLocal
+    case global
 }

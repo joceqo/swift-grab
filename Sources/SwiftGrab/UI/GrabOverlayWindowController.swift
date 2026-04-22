@@ -9,6 +9,9 @@ final class GrabOverlayWindowController {
         guard panel == nil else { return }
         guard let screen = NSScreen.main else { return }
 
+        // Full screen frame — covers menu bar so menu items are inspectable.
+        // Use ESC, Cmd+Option+I, or the toolbar's X to exit (menu bar clicks
+        // are captured while the inspector is active).
         let panel = GrabPanel(
             contentRect: screen.frame,
             styleMask: [.borderless],
@@ -18,7 +21,11 @@ final class GrabOverlayWindowController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
-        panel.level = .statusBar
+        // Above popUpMenu (101) so our highlight and tags render on top of
+        // system popovers (Wi-Fi, Control Center, Dayflow menu bar, etc.).
+        // Consequence: overlay captures clicks inside those popovers while
+        // inspector is active — which is expected inspector behavior.
+        panel.level = NSWindow.Level(rawValue: NSWindow.Level.popUpMenu.rawValue + 1)
         panel.ignoresMouseEvents = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.titleVisibility = .hidden

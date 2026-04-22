@@ -44,6 +44,23 @@ enum CoordinateMapper {
         )
     }
 
+    /// AppKit screen point (origin bottom-left) → Quartz point (origin top-left of primary).
+    static func quartzPoint(fromAppKitScreenPoint point: CGPoint) -> CGPoint {
+        guard let primaryHeight = NSScreen.screens.first?.frame.height else { return point }
+        return CGPoint(x: point.x, y: primaryHeight - point.y)
+    }
+
+    /// Quartz/CG rect (origin top-left of primary) → AppKit screen rect (origin bottom-left).
+    static func appKitRect(fromQuartzRect rect: CGRect) -> CGRect {
+        guard let primaryHeight = NSScreen.screens.first?.frame.height else { return rect }
+        return CGRect(
+            x: rect.origin.x,
+            y: primaryHeight - rect.origin.y - rect.height,
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
     // MARK: - Utilities
 
     static func clampToVisibleScreens(_ rect: CGRect) -> CGRect {
