@@ -1,20 +1,59 @@
-# SwiftGrab
+<p align="center">
+  <img src="scripts/assets/swiftgrab-icon-source.png" width="128" height="128" alt="SwiftGrab icon">
+</p>
 
-`SwiftGrab` is a macOS Swift package that provides an app-local inspector flow similar to `react-grab` for native apps.
+<h1 align="center">SwiftGrab</h1>
+
+<p align="center">
+  macOS inspector capture for AI-ready bug and debug payloads.
+</p>
+
+`SwiftGrab` is a Swift + SwiftUI/AppKit tool for capturing the UI context an AI agent needs to help debug native macOS apps: target metadata, cursor/selection coordinates, screenshots, user notes, and structured errors.
+
+The menu bar app uses the native SF Symbol `cursorarrow.rays`; the release app icon is generated from `scripts/assets/swiftgrab-icon-source.png`.
 
 ## Features
 
-- Toggle inspect mode with `Cmd+Option+I`
-- Floating non-activating toolbar (`Select Element`, `Select Region`, `Cancel`, `Copy Payload`)
-- Hover highlight and click-to-capture
-- Drag-to-select region capture
-- AI-ready payload with screenshot + metadata + user note
-- SwiftUI modifier for drop-in integration
+- Toggle inspect mode with `Cmd+Option+I`.
+- Menu bar app for standalone inspector workflows.
+- Floating non-activating toolbar: `Select Element`, `Select Region`, `Cancel`, `Copy Payload`.
+- Hover highlight and click-to-capture.
+- Drag-to-select region capture.
+- AI-ready JSON payload with screenshot, metadata, user note, and structured errors.
+- SwiftUI modifier for app-local integration.
 
-## Install
+## Download
+
+Download the latest signed and notarized macOS DMG from GitHub Releases:
+
+https://github.com/joceqo/swift-grab/releases/latest
+
+Current release:
+
+- `v1.0.2`
+- `SwiftGrab-1.0.2.dmg`
+- Signed with Developer ID
+- Notarized and stapled by Apple
+
+Install:
+
+1. Download `SwiftGrab-1.0.2.dmg`.
+2. Open the DMG.
+3. Drag `SwiftGrab.app` to `Applications`.
+4. Launch SwiftGrab.
+5. Grant Accessibility access in **System Settings -> Privacy & Security -> Accessibility**.
+
+The app is a menu bar utility. Look for the cursor/rays icon in the macOS menu bar.
+
+## Swift Package
 
 1. In Xcode: **File > Add Package Dependencies...**
-2. Add this package URL (replace with your repo URL once published).
+2. Add this package URL:
+
+```text
+https://github.com/joceqo/swift-grab
+```
+
 3. Add product `SwiftGrab` to your macOS app target.
 
 Local development in this repo:
@@ -23,18 +62,6 @@ Local development in this repo:
 swift build
 swift run SwiftGrabDemo
 ```
-
-## Running the Menu Bar App
-
-Use the provided script — it builds a signed `.app` bundle so the Accessibility grant survives rebuilds:
-
-```bash
-./scripts/run.sh
-```
-
-Then grant Accessibility to `SwiftGrab.app` in **System Settings → Privacy & Security → Accessibility**.
-
-**Do not use `swift run SwiftGrabApp`.** The CLI binary path changes on every rebuild, and macOS TCC treats each rebuilt binary as a new app — the grant won't stick.
 
 ## Quick Start
 
@@ -62,6 +89,35 @@ SwiftGrab.start(mode: .appLocal)
 // ...
 SwiftGrab.stop()
 ```
+
+## Running the Menu Bar App
+
+Use the provided script — it builds a signed `.app` bundle so the Accessibility grant survives rebuilds:
+
+```bash
+./scripts/run.sh
+```
+
+Then grant Accessibility to `SwiftGrab.app` in **System Settings → Privacy & Security → Accessibility**.
+
+**Do not use `swift run SwiftGrabApp`.** The CLI binary path changes on every rebuild, and macOS TCC treats each rebuilt binary as a new app — the grant won't stick.
+
+## Release Build
+
+Build a signed, notarized DMG:
+
+```bash
+VERSION=1.0.2 scripts/make-dmg.sh
+```
+
+The release script:
+
+- Builds `SwiftGrabApp` in release mode.
+- Creates `SwiftGrab.app`.
+- Signs with `Developer ID Application`.
+- Creates a DMG, using `create-dmg` when installed or `hdiutil` as a fallback.
+- Submits the DMG to Apple notarization.
+- Staples and validates the notarization ticket.
 
 ## Payload Example
 
@@ -99,8 +155,22 @@ SwiftGrab.stop()
 - Inspects only one app-local context (no cross-app AX hit testing yet).
 - If Screen Recording is denied, payload is still emitted with metadata and an `errors` entry.
 
-## V2 Notes
+## Icon
 
-- Screenshot capture uses `ScreenCaptureKit`.
-- Toolbar includes `Grant Screen Access` to trigger screen recording permission prompt.
-- Region mode captures drag selection rectangle instead of fixed box.
+The source image for the app icon is:
+
+```text
+scripts/assets/swiftgrab-icon-source.png
+```
+
+Regenerate all `AppIcon.appiconset` PNG sizes:
+
+```bash
+swift scripts/generate-icon.swift
+```
+
+The menu bar and panel header use the SF Symbol:
+
+```text
+cursorarrow.rays
+```

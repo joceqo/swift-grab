@@ -32,10 +32,19 @@ func resizedPNG(from image: NSImage, pixelSize: Int) throws -> Data {
 
     resized.lockFocus()
     NSGraphicsContext.current?.imageInterpolation = .high
+    NSColor.clear.setFill()
+    NSRect(origin: .zero, size: size).fill()
+
+    // The generated source includes black outside the rounded app icon shape.
+    // Clip it away so macOS renders transparent corners instead of a black box.
+    let clipRect = NSRect(origin: .zero, size: size)
+    let cornerRadius = CGFloat(pixelSize) * 0.225
+    NSBezierPath(roundedRect: clipRect, xRadius: cornerRadius, yRadius: cornerRadius).addClip()
+
     image.draw(
-        in: NSRect(origin: .zero, size: size),
+        in: clipRect,
         from: NSRect(origin: .zero, size: image.size),
-        operation: .copy,
+        operation: .sourceOver,
         fraction: 1
     )
     resized.unlockFocus()
