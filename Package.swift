@@ -32,7 +32,11 @@ let package = Package(
         ),
         .executableTarget(
             name: "SwiftGrabApp",
-            dependencies: ["SwiftGrab"]
+            dependencies: ["SwiftGrab"],
+            exclude: [
+                "Assets.xcassets",
+                "SwiftGrabApp.entitlements"
+            ]
         ),
         .testTarget(
             name: "SwiftGrabTests",

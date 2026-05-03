@@ -32,7 +32,7 @@ final class MenuBarPanelManager: NSObject {
         guard let button = statusItem?.button else { return }
 
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
-        let image = NSImage(systemSymbolName: "scope", accessibilityDescription: "SwiftGrab")?
+        let image = NSImage(systemSymbolName: "cursorarrow.rays", accessibilityDescription: "SwiftGrab")?
             .withSymbolConfiguration(config)
         image?.isTemplate = true
         button.image = image

@@ -14,7 +14,7 @@ struct MenuBarPanelView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             HStack {
-                Image(systemName: "scope")
+                Image(systemName: "cursorarrow.rays")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
                 Text("SwiftGrab")

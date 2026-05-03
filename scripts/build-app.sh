@@ -4,6 +4,7 @@
 #
 # Environment overrides:
 #   CONFIGURATION   debug (default) | release
+#   VERSION         bundle version/short version (default: 1.0)
 #   SIGN_IDENTITY   codesign identity; auto-picks best available if unset
 #                   (prefers "Developer ID Application" for release, then
 #                   "Apple Development" for debug, falls back to ad-hoc "-")
@@ -16,6 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 APP_NAME="SwiftGrab"
 CONFIGURATION="${CONFIGURATION:-debug}"
+VERSION="${VERSION:-1.0}"
 APP_BUNDLE="$PROJECT_DIR/.build/${APP_NAME}.app"
 CONTENTS="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
@@ -67,9 +69,9 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
     <key>CFBundleIdentifier</key>
     <string>com.swiftgrab.app</string>
     <key>CFBundleVersion</key>
-    <string>1.0</string>
+    <string>__VERSION__</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>__VERSION__</string>
     <key>CFBundleExecutable</key>
     <string>SwiftGrab</string>
     <key>CFBundlePackageType</key>
@@ -85,6 +87,7 @@ cat > "$CONTENTS/Info.plist" << 'PLIST'
 </dict>
 </plist>
 PLIST
+sed -i '' "s/__VERSION__/$VERSION/g" "$CONTENTS/Info.plist"
 
 # Pick signing identity.
 if [ -z "${SIGN_IDENTITY:-}" ]; then

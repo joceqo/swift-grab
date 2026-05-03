@@ -12,7 +12,8 @@
 #            --apple-id "you@example.com" \
 #            --team-id "XXXXXXXXXX" \
 #            --password "xxxx-xxxx-xxxx-xxxx"
-#   5. brew install create-dmg
+#   5. Optional: brew install create-dmg for a styled Finder window.
+#      If create-dmg is unavailable, the script falls back to hdiutil.
 #
 # Environment overrides:
 #   VERSION         Semver tag baked into DMG filename (default: 1.0.0)
@@ -47,7 +48,7 @@ echo "==> Signing identity: $SIGN_IDENTITY"
 
 # --- 2. Release build + signed app bundle -------------------------------------
 echo "==> Building release app bundle..."
-CONFIGURATION=release SIGN_IDENTITY="$SIGN_IDENTITY" HARDENED=1 \
+VERSION="$VERSION" CONFIGURATION=release SIGN_IDENTITY="$SIGN_IDENTITY" HARDENED=1 \
     "$SCRIPT_DIR/build-app.sh"
 
 echo "==> Verifying signature..."
@@ -60,18 +61,28 @@ echo "==> Staging DMG contents..."
 rm -rf "$DMG_STAGING" "$DMG_OUT"
 mkdir -p "$DMG_STAGING"
 cp -R "$APP_BUNDLE" "$DMG_STAGING/"
+ln -s /Applications "$DMG_STAGING/Applications"
 
 echo "==> Creating DMG..."
-create-dmg \
-    --volname "$APP_NAME" \
-    --window-pos 200 120 \
-    --window-size 600 360 \
-    --icon-size 100 \
-    --icon "${APP_NAME}.app" 150 180 \
-    --app-drop-link 450 180 \
-    --hide-extension "${APP_NAME}.app" \
-    "$DMG_OUT" \
-    "$DMG_STAGING"
+if command -v create-dmg >/dev/null 2>&1; then
+    create-dmg \
+        --volname "$APP_NAME" \
+        --window-pos 200 120 \
+        --window-size 600 360 \
+        --icon-size 100 \
+        --icon "${APP_NAME}.app" 150 180 \
+        --app-drop-link 450 180 \
+        --hide-extension "${APP_NAME}.app" \
+        "$DMG_OUT" \
+        "$DMG_STAGING"
+else
+    hdiutil create \
+        -volname "$APP_NAME" \
+        -srcfolder "$DMG_STAGING" \
+        -ov \
+        -format UDZO \
+        "$DMG_OUT"
+fi
 
 rm -rf "$DMG_STAGING"
 
